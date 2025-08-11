@@ -1,17 +1,29 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Moon, Sun, Menu, User, Search } from "lucide-react";
+import { MapPin, Moon, Sun, Menu, User, Search, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(true); // Default to dark mode for Gen-Z aesthetic
+  const { user, isAuthenticated, logout } = useAuth();
 
   const toggleTheme = () => {
     setIsDark(!isDark);
     document.documentElement.classList.toggle('light');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success("Logged out successfully");
+    } catch (error) {
+      toast.error("Logout failed");
+    }
   };
 
   return (
@@ -39,15 +51,18 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link to="/explore" className="text-foreground hover:text-primary transition-colors">
-              Explore
-            </Link>
-            <Link to="/matches" className="text-foreground hover:text-primary transition-colors">
-              Matches
-            </Link>
-            <Link to="/profile" className="text-foreground hover:text-primary transition-colors">
-              Profile
-            </Link>
+            {isAuthenticated && (
+              <>
+                {user?.user_type === 'owner' && (
+                  <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
+                    Dashboard
+                  </Link>
+                )}
+                <Link to="/profile" className="text-foreground hover:text-primary transition-colors">
+                  Profile
+                </Link>
+              </>
+            )}
           </nav>
 
           {/* Actions */}
@@ -74,19 +89,43 @@ export function Header() {
             </Button>
 
             {/* Auth Buttons */}
-            <div className="hidden sm:flex items-center space-x-2">
-              <Link to="/login">
-                <Button variant="outline" size="sm">
-                  Log In
+            {isAuthenticated ? (
+              <div className="hidden sm:flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
+                    <span className="text-primary-foreground font-bold text-sm">
+                      {user?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                    </span>
+                  </div>
+                  <div className="hidden lg:block">
+                    <p className="text-sm font-medium">{user?.first_name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{user?.user_type}</p>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleLogout}
+                  className="hover:text-error"
+                >
+                  <LogOut className="h-4 w-4" />
                 </Button>
-              </Link>
-              <Link to="/signup">
-                <Button variant="hero" size="sm">
-                  <User className="h-4 w-4" />
-                  Sign Up
-                </Button>
-              </Link>
-            </div>
+              </div>
+            ) : (
+              <div className="hidden sm:flex items-center space-x-2">
+                <Link to="/login">
+                  <Button variant="outline" size="sm">
+                    Log In
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button variant="hero" size="sm">
+                    <User className="h-4 w-4" />
+                    Sign Up
+                  </Button>
+                </Link>
+              </div>
+            )}
 
             {/* Mobile Menu Button */}
             <Button 
@@ -109,28 +148,51 @@ export function Header() {
             className="md:hidden py-4 border-t border-glass-border"
           >
             <nav className="flex flex-col space-y-4">
-              <Link to="/explore" className="text-foreground hover:text-primary transition-colors py-2">
-                Explore Facilities
-              </Link>
-              <Link to="/matches" className="text-foreground hover:text-primary transition-colors py-2">
-                Find Matches
-              </Link>
-              <Link to="/profile" className="text-foreground hover:text-primary transition-colors py-2">
-                My Profile
-              </Link>
-              <div className="flex flex-col space-y-2 mt-4">
-                <Link to="/login">
-                  <Button variant="outline" className="w-full">
-                    Log In
+              {isAuthenticated ? (
+                <>
+                  {user?.user_type === 'owner' && (
+                    <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors py-2">
+                      Dashboard
+                    </Link>
+                  )}
+                  <Link to="/profile" className="text-foreground hover:text-primary transition-colors py-2">
+                    My Profile
+                  </Link>
+                  <div className="flex items-center space-x-2 py-2">
+                    <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
+                      <span className="text-primary-foreground font-bold text-sm">
+                        {user?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{user?.first_name} {user?.last_name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{user?.user_type}</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
                   </Button>
-                </Link>
-                <Link to="/signup">
-                  <Button variant="hero" className="w-full">
-                    <User className="h-4 w-4" />
-                    Sign Up
-                  </Button>
-                </Link>
-              </div>
+                </>
+              ) : (
+                <div className="flex flex-col space-y-2 mt-4">
+                  <Link to="/login">
+                    <Button variant="outline" className="w-full">
+                      Log In
+                    </Button>
+                  </Link>
+                  <Link to="/signup">
+                    <Button variant="hero" className="w-full">
+                      <User className="h-4 w-4" />
+                      Sign Up
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </nav>
           </motion.div>
         )}

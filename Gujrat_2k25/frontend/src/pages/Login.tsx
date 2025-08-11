@@ -1,30 +1,86 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
+  const navigate = useNavigate();
+  const { login, getRedirectPath } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Handle login logic here
-    console.log("Login attempt:", formData);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear validation error when user starts typing
+    if (validationErrors[name]) {
+      setValidationErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    
+    if (!formData.email.trim()) errors.email = "Email is required";
+    if (!formData.password) errors.password = "Password is required";
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (formData.email && !emailRegex.test(formData.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      toast.error("Please fix the errors in the form");
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      const success = await login(formData.email, formData.password);
+      
+      if (success) {
+        toast.success("Login successful!");
+        
+        // Get user data from localStorage to check user type
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+          const redirectPath = getRedirectPath(user.user_type);
+          navigate(redirectPath);
+        } else {
+          navigate('/');
+        }
+      } else {
+        toast.error("Login failed. Please check your credentials.");
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error("Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -89,10 +145,15 @@ export default function Login() {
                       placeholder="Enter your email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      className="pl-10"
+                      className={`pl-10 ${validationErrors.email ? 'border-error' : ''}`}
                       required
                     />
                   </div>
+                  {validationErrors.email && (
+                    <p className="text-xs text-error">
+                      {validationErrors.email}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -106,7 +167,7 @@ export default function Login() {
                       placeholder="Enter your password"
                       value={formData.password}
                       onChange={handleInputChange}
-                      className="pl-10 pr-10"
+                      className={`pl-10 pr-10 ${validationErrors.password ? 'border-error' : ''}`}
                       required
                     />
                     <Button
@@ -123,6 +184,11 @@ export default function Login() {
                       )}
                     </Button>
                   </div>
+                  {validationErrors.password && (
+                    <p className="text-xs text-error">
+                      {validationErrors.password}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -144,8 +210,13 @@ export default function Login() {
                   </Link>
                 </div>
 
-                <Button type="submit" variant="hero" className="w-full">
-                  Sign In
+                <Button 
+                  type="submit" 
+                  variant="hero" 
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Signing In..." : "Sign In"}
                 </Button>
 
                 <div className="relative my-6">
@@ -160,10 +231,10 @@ export default function Login() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" disabled>
                     Google
                   </Button>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" disabled>
                     Facebook
                   </Button>
                 </div>
