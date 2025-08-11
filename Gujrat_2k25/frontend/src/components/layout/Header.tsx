@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { MapPin, Moon, Sun, Menu, User, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Link } from "react-router-dom";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -22,29 +23,31 @@ export function Header() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            className="flex items-center space-x-2"
-          >
-            <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">Q</span>
-            </div>
-            <span className="font-display font-bold text-xl bg-gradient-hero bg-clip-text text-transparent">
-              QuickCourt
-            </span>
-          </motion.div>
+          <Link to="/">
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              className="flex items-center space-x-2 cursor-pointer"
+            >
+              <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground font-bold text-lg">Q</span>
+              </div>
+              <span className="font-display font-bold text-xl bg-gradient-hero bg-clip-text text-transparent">
+                QuickCourt
+              </span>
+            </motion.div>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <a href="/explore" className="text-foreground hover:text-primary transition-colors">
+            <Link to="/explore" className="text-foreground hover:text-primary transition-colors">
               Explore
-            </a>
-            <a href="/matches" className="text-foreground hover:text-primary transition-colors">
+            </Link>
+            <Link to="/matches" className="text-foreground hover:text-primary transition-colors">
               Matches
-            </a>
-            <a href="/profile" className="text-foreground hover:text-primary transition-colors">
+            </Link>
+            <Link to="/profile" className="text-foreground hover:text-primary transition-colors">
               Profile
-            </a>
+            </Link>
           </nav>
 
           {/* Actions */}
@@ -70,11 +73,20 @@ export function Header() {
               {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
-            {/* User Menu */}
-            <Button variant="hero" size="sm" className="hidden sm:flex">
-              <User className="h-4 w-4" />
-              Sign In
-            </Button>
+            {/* Auth Buttons */}
+            <div className="hidden sm:flex items-center space-x-2">
+              <Link to="/login">
+                <Button variant="outline" size="sm">
+                  Log In
+                </Button>
+              </Link>
+              <Link to="/signup">
+                <Button variant="hero" size="sm">
+                  <User className="h-4 w-4" />
+                  Sign Up
+                </Button>
+              </Link>
+            </div>
 
             {/* Mobile Menu Button */}
             <Button 
@@ -97,19 +109,28 @@ export function Header() {
             className="md:hidden py-4 border-t border-glass-border"
           >
             <nav className="flex flex-col space-y-4">
-              <a href="/explore" className="text-foreground hover:text-primary transition-colors py-2">
+              <Link to="/explore" className="text-foreground hover:text-primary transition-colors py-2">
                 Explore Facilities
-              </a>
-              <a href="/matches" className="text-foreground hover:text-primary transition-colors py-2">
+              </Link>
+              <Link to="/matches" className="text-foreground hover:text-primary transition-colors py-2">
                 Find Matches
-              </a>
-              <a href="/profile" className="text-foreground hover:text-primary transition-colors py-2">
+              </Link>
+              <Link to="/profile" className="text-foreground hover:text-primary transition-colors py-2">
                 My Profile
-              </a>
-              <Button variant="hero" className="mt-4">
-                <User className="h-4 w-4" />
-                Sign In
-              </Button>
+              </Link>
+              <div className="flex flex-col space-y-2 mt-4">
+                <Link to="/login">
+                  <Button variant="outline" className="w-full">
+                    Log In
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button variant="hero" className="w-full">
+                    <User className="h-4 w-4" />
+                    Sign Up
+                  </Button>
+                </Link>
+              </div>
             </nav>
           </motion.div>
         )}

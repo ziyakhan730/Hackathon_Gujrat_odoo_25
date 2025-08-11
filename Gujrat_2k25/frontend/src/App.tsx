@@ -9,6 +9,8 @@ import Explore from "./pages/Explore";
 import Matches from "./pages/Matches";
 import Profile from "./pages/Profile";
 import FacilityDetail from "./pages/FacilityDetail";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -33,6 +35,8 @@ const App = () => (
             <Route path="/facility/:id" element={<FacilityDetail />} />
             <Route path="/matches" element={<Matches />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
