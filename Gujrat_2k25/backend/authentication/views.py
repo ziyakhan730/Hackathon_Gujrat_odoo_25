@@ -29,7 +29,11 @@ class UserRegistrationView(APIView):
     @transaction.atomic
     def post(self, request):
         """Register a new user"""
+        print(f"Registration request data: {request.data}")
         serializer = UserRegistrationSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            print(f"Registration validation errors: {serializer.errors}")
         
         if serializer.is_valid():
             try:
@@ -311,7 +315,7 @@ class SendOTPView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class VerifyEmailView(APIView):
-    """API view for email verification"""
+    """API view for email verification (requires authentication)"""
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
@@ -326,6 +330,68 @@ class VerifyEmailView(APIView):
             try:
                 user = request.user
                 otp = serializer.validated_data['otp']
+                
+                print(f"Verifying OTP {otp} for user {user.email}")
+                
+                # Verify OTP
+                success, message = EmailService.verify_otp(user, otp)
+                
+                print(f"Verification result: {success}, {message}")
+                
+                if success:
+                    return Response({
+                        'success': True,
+                        'message': message
+                    }, status=status.HTTP_200_OK)
+                else:
+                    return Response({
+                        'success': False,
+                        'message': message
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+            except Exception as e:
+                print(f"Verification error: {e}")
+                return Response({
+                    'success': False,
+                    'message': 'Verification failed',
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            print(f"Serializer errors: {serializer.errors}")
+        
+        return Response({
+            'success': False,
+            'message': 'Validation failed',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+class VerifyEmailWithoutAuthView(APIView):
+    """API view for email verification without authentication (for new registrations)"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        """Verify email with OTP and email"""
+        serializer = EmailVerificationSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            try:
+                email = request.data.get('email')
+                otp = serializer.validated_data['otp']
+                
+                if not email:
+                    return Response({
+                        'success': False,
+                        'message': 'Email is required'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Find user by email
+                try:
+                    user = User.objects.get(email=email)
+                except User.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'message': 'User not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
                 
                 print(f"Verifying OTP {otp} for user {user.email}")
                 

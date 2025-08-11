@@ -23,6 +23,25 @@ interface Court {
   is_available: boolean;
   opening_time: string;
   closing_time: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  latitude: number;
+  longitude: number;
+  photos: Array<{
+    id: number;
+    image: string;
+    caption: string;
+    is_primary: boolean;
+  }>;
+  time_slots: Array<{
+    id: number;
+    start_time: string;
+    end_time: string;
+    is_available: boolean;
+    duration_hours: number;
+  }>;
   created_at: string;
   updated_at: string;
   total_bookings: number;
@@ -110,6 +129,34 @@ export function CourtCard({ court, onEdit, onView, onDelete }: CourtCardProps) {
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Surface:</span>
               <span className="text-sm font-medium">{court.surface_type}</span>
+            </div>
+          )}
+          
+          {/* Address Information */}
+          {court.address && (
+            <div className="pt-2 border-t">
+              <p className="text-sm text-muted-foreground mb-1">Address:</p>
+              <p className="text-xs">{court.address}</p>
+              <p className="text-xs">{court.city}, {court.state} {court.pincode}</p>
+            </div>
+          )}
+          
+          {/* Time Slots */}
+          {court.time_slots && court.time_slots.length > 0 && (
+            <div className="pt-2 border-t">
+              <p className="text-sm text-muted-foreground mb-1">Available Time Slots:</p>
+              <div className="flex flex-wrap gap-1">
+                {court.time_slots.slice(0, 3).map((slot, index) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    {slot.start_time} - {slot.end_time}
+                  </Badge>
+                ))}
+                {court.time_slots.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{court.time_slots.length - 3} more
+                  </Badge>
+                )}
+              </div>
             </div>
           )}
         </div>

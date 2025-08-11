@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>New Booking Received</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #111827; }
+      .container { max-width: 640px; margin: 0 auto; padding: 16px; }
+      .header { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+      .section { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-top: 12px; }
+      .label { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+      .value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">New booking received</div>
+      <p>Hi {{ user.first_name }},</p>
+      <p>You have received a new booking for your venue.</p>
+
+      <div class="section">
+        <div class="label">Booking ID</div>
+        <div class="value">{{ booking.booking_id }}</div>
+
+        <div class="label" style="margin-top:10px;">Court</div>
+        <div class="value">{{ booking.court.name }}</div>
+
+        <div class="label" style="margin-top:10px;">Facility</div>
+        <div class="value">{{ booking.facility.name }}</div>
+
+        <div class="label" style="margin-top:10px;">Date</div>
+        <div class="value">{{ booking.booking_date }}</div>
+
+        <div class="label" style="margin-top:10px;">Time</div>
+        <div class="value">{{ booking.start_time }} - {{ booking.end_time }}</div>
+
+        <div class="label" style="margin-top:10px;">Player</div>
+        <div class="value">{{ booking.user.get_full_name }} ({{ booking.user.email }})</div>
+      </div>
+
+      <p style="margin-top:16px;">You can review and approve this booking from your owner dashboard.</p>
+      <p>Regards,<br/>QuickCourt</p>
+    </div>
+  </body>
+</html> 

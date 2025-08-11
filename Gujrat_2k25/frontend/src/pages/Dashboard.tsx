@@ -16,12 +16,17 @@ import { BookingTable } from "@/components/dashboard/BookingTable";
 import { BookingTrendsChart } from "@/components/dashboard/BookingTrendsChart";
 import { PeakHoursChart } from "@/components/dashboard/PeakHoursChart";
 import { CourtRegistrationModal } from "@/components/dashboard/CourtRegistrationModal";
+import { CourtDetailModal } from "@/components/dashboard/CourtDetailModal";
+import { CourtEditModal } from "@/components/dashboard/CourtEditModal";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedPeriod, setSelectedPeriod] = useState("week");
   const [isCourtModalOpen, setIsCourtModalOpen] = useState(false);
+  const [isCourtDetailModalOpen, setIsCourtDetailModalOpen] = useState(false);
+  const [isCourtEditModalOpen, setIsCourtEditModalOpen] = useState(false);
+  const [selectedCourt, setSelectedCourt] = useState<any>(null);
   
   // State for real data
   const [kpis, setKpis] = useState({
@@ -183,12 +188,31 @@ export default function Dashboard() {
   }, [selectedPeriod]);
 
   // Handler functions
-  const handleCourtEdit = (court: any) => {
-    toast.info(`Editing court: ${court.name}`);
+  const handleCourtEdit = async (court: any) => {
+    console.log('Edit court:', court);
+    setSelectedCourt(court);
+    setIsCourtEditModalOpen(true);
+    
+    // Ensure sports are loaded for the edit modal
+    if (sports.length === 0) {
+      try {
+        console.log('Loading sports for court edit modal...');
+        const sportsData = await sportsAPI.getAll();
+        console.log('Sports data for edit modal:', sportsData);
+        // Handle paginated response from sports API
+        const sportsArray = sportsData.results || sportsData;
+        setSports(Array.isArray(sportsArray) ? sportsArray : []);
+      } catch (error) {
+        console.error('Error loading sports for edit modal:', error);
+        toast.error('Failed to load sports data. Please try again.');
+      }
+    }
   };
 
   const handleCourtView = (court: any) => {
-    toast.info(`Viewing court: ${court.name}`);
+    console.log('View court:', court);
+    setSelectedCourt(court);
+    setIsCourtDetailModalOpen(true);
   };
 
   const handleCourtDelete = (courtId: number) => {
@@ -212,8 +236,15 @@ export default function Dashboard() {
     toast.info(`Editing booking: ${booking.id}`);
   };
 
-  const handleBookingStatusChange = (bookingId: number, status: string) => {
-    toast.success(`Booking ${bookingId} status changed to ${status}`);
+  const handleBookingStatusChange = async (bookingId: number, status: string) => {
+    try {
+      await bookingsAPI.updateStatus(bookingId, status);
+      toast.success(`Booking ${bookingId} status updated to ${status}`);
+      await loadDashboardData();
+    } catch (e: any) {
+      console.error('Failed to update booking status', e);
+      toast.error(e.message || 'Failed to update booking status');
+    }
   };
 
   const handleCourtCreated = () => {
@@ -234,8 +265,12 @@ export default function Dashboard() {
         console.log('Sports data:', sportsData);
         console.log('Amenities data:', amenitiesData);
         
-        setSports(Array.isArray(sportsData) ? sportsData : []);
-        setAmenities(Array.isArray(amenitiesData) ? amenitiesData : []);
+        // Handle paginated response from sports API
+        const sportsArray = sportsData.results || sportsData;
+        const amenitiesArray = amenitiesData.results || amenitiesData;
+        
+        setSports(Array.isArray(sportsArray) ? sportsArray : []);
+        setAmenities(Array.isArray(amenitiesArray) ? amenitiesArray : []);
       } catch (error) {
         console.error('Error loading sports and amenities:', error);
         setSports([]);
@@ -246,10 +281,9 @@ export default function Dashboard() {
       }
     };
 
-    if (activeTab === 'facilities') {
-      loadSportsAndAmenities();
-    }
-  }, [activeTab]);
+    // Load sports and amenities on component mount and when facilities tab is active
+    loadSportsAndAmenities();
+  }, []); // Remove activeTab dependency to load on mount
 
   // Facility form handlers
   const handleFacilityInputChange = (field: string, value: string | number[] | File[]) => {
@@ -876,6 +910,51 @@ export default function Dashboard() {
         isOpen={isCourtModalOpen}
         onClose={handleCourtModalClose}
         onSuccess={handleCourtCreated}
+      />
+
+      {/* Court Detail Modal */}
+      <CourtDetailModal
+        court={selectedCourt}
+        isOpen={isCourtDetailModalOpen}
+        onClose={() => setIsCourtDetailModalOpen(false)}
+        onEdit={handleCourtEdit}
+      />
+
+      {/* Court Edit Modal */}
+      <CourtEditModal
+        court={selectedCourt}
+        isOpen={isCourtEditModalOpen}
+        onClose={() => setIsCourtEditModalOpen(false)}
+        onSave={async (courtData) => {
+          try {
+            console.log('Saving court data:', courtData);
+            
+            // Prepare the data for API
+            const updateData = {
+              ...courtData,
+              price_per_hour: parseFloat(courtData.price_per_hour),
+              latitude: courtData.latitude ? parseFloat(courtData.latitude) : null,
+              longitude: courtData.longitude ? parseFloat(courtData.longitude) : null,
+              time_slots: courtData.time_slots.filter((slot: any) => slot.start_time && slot.end_time)
+            };
+            
+            // Call the API to update the court
+            await courtsAPI.update(selectedCourt.id, updateData);
+            
+            toast.success('Court updated successfully!');
+            
+            // Reload the courts data to reflect changes
+            await loadDashboardData();
+            
+            // Close the modal
+            setIsCourtEditModalOpen(false);
+            setSelectedCourt(null);
+          } catch (error: any) {
+            console.error('Error updating court:', error);
+            toast.error(error.message || 'Failed to update court. Please try again.');
+          }
+        }}
+        sports={sports}
       />
     </div>
   );

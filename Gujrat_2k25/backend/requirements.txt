@@ -5,4 +5,5 @@ django-cors-headers==4.3.1
 django-phonenumber-field==7.3.0
 phonenumbers==8.13.30
 Pillow==10.1.0
-python-decouple==3.8 
+python-decouple==3.8
+razorpay==1.4.2 

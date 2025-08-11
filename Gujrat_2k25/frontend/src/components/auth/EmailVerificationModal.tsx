@@ -19,7 +19,7 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
   onSuccess,
   email
 }) => {
-  const { setUser } = useAuth();
+  const { setUser, verifyEmail, sendOTP } = useAuth();
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -52,59 +52,19 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
 
     setIsLoading(true);
     try {
-      const tempToken = localStorage.getItem('temp_access_token');
-      const tempUser = localStorage.getItem('temp_user');
-      
       console.log('=== Email Verification Debug ===');
-      console.log('Temp token:', tempToken);
-      console.log('Temp user:', tempUser);
       console.log('OTP being sent:', otp);
       console.log('Email:', email);
       
-      if (!tempToken) {
-        console.error('No temporary access token found!');
-        toast.error('Authentication error. Please try registering again.');
-        return;
-      }
+      // Use the verifyEmail function from AuthContext
+      const success = await verifyEmail(otp, email);
       
-      const response = await fetch('http://localhost:8000/api/auth/verify-email/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tempToken}`,
-        },
-        body: JSON.stringify({ otp }),
-      });
-
-      console.log('Response status:', response.status);
-      const data = await response.json();
-      console.log('Response data:', data);
-
-      if (response.ok && data.success) {
-        toast.success('Email verified successfully!');
-        
-        // Move temporary tokens to permanent storage and set user as authenticated
-        const tempUser = localStorage.getItem('temp_user');
-        if (tempUser) {
-          const userData = JSON.parse(tempUser);
-          userData.is_email_verified = true;
-          localStorage.setItem('access_token', localStorage.getItem('temp_access_token') || '');
-          localStorage.setItem('refresh_token', localStorage.getItem('temp_refresh_token') || '');
-          localStorage.setItem('user', JSON.stringify(userData));
-          
-          // Set user in AuthContext
-          setUser(userData);
-          
-          // Clean up temporary storage
-          localStorage.removeItem('temp_access_token');
-          localStorage.removeItem('temp_refresh_token');
-          localStorage.removeItem('temp_user');
-        }
-        
+      if (success) {
+        toast.success('Email verified successfully! Your account is now active.');
         onSuccess();
         onClose();
       } else {
-        toast.error(data.message || 'Verification failed');
+        toast.error('Verification failed. Please check your OTP and try again.');
       }
     } catch (error) {
       console.error('Verification error:', error);
@@ -117,22 +77,14 @@ export const EmailVerificationModal: React.FC<EmailVerificationModalProps> = ({
   const handleResendOTP = async () => {
     setIsResending(true);
     try {
-      const response = await fetch('http://localhost:8000/api/auth/send-otp/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('temp_access_token')}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
+      const success = await sendOTP();
+      
+      if (success) {
         toast.success('OTP sent successfully!');
         setTimeLeft(60);
         setCanResend(false);
       } else {
-        toast.error(data.message || 'Failed to send OTP');
+        toast.error('Failed to send OTP. Please try again.');
       }
     } catch (error) {
       console.error('Resend error:', error);

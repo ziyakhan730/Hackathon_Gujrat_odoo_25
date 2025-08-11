@@ -98,7 +98,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         """Create a new user"""
         validated_data.pop('confirm_password')
         
-        # Create user with email as username
+        # Create user with email as username and set as inactive until email verification
         user = User.objects.create_user(
             username=validated_data['email'],
             email=validated_data['email'],
@@ -107,7 +107,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data['last_name'],
             phone_number=validated_data.get('phone_number'),
             country_code=validated_data.get('country_code', '+91'),
-            user_type=validated_data['user_type']
+            user_type=validated_data['user_type'],
+            is_active=False  # User is inactive until email is verified
         )
         
         return user
@@ -130,7 +131,10 @@ class UserLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError('Invalid email or password')
             
             if not user.is_active:
-                raise serializers.ValidationError('User account is disabled')
+                if not user.is_email_verified:
+                    raise serializers.ValidationError('Please verify your email address before logging in. Check your email for the verification code.')
+                else:
+                    raise serializers.ValidationError('User account is disabled')
             
             attrs['user'] = user
         else:
@@ -181,6 +185,7 @@ class LogoutSerializer(serializers.Serializer):
 class EmailVerificationSerializer(serializers.Serializer):
     """Serializer for email verification"""
     otp = serializers.CharField(max_length=6, min_length=6, required=True)
+    email = serializers.EmailField(required=False)  # Optional for authenticated users
     
     def validate_otp(self, value):
         """Validate OTP format"""

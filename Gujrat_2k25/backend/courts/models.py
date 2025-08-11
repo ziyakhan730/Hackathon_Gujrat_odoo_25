@@ -66,6 +66,20 @@ class FacilityPhoto(models.Model):
     def __str__(self):
         return f"Photo for {self.facility.name}"
 
+class CourtPhoto(models.Model):
+    """Model for court photos"""
+    court = models.ForeignKey('Court', on_delete=models.CASCADE, related_name='photos')
+    image = models.ImageField(upload_to='court_photos/')
+    caption = models.CharField(max_length=200, blank=True)
+    is_primary = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-is_primary', '-created_at']
+    
+    def __str__(self):
+        return f"Photo for {self.court.name}"
+
 class Sport(models.Model):
     """Model for sports types"""
     name = models.CharField(max_length=100, unique=True)
@@ -138,6 +152,14 @@ class Court(models.Model):
     surface_type = models.CharField(max_length=100, blank=True)
     court_size = models.CharField(max_length=100, blank=True)
     
+    # Address Information
+    address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    pincode = models.CharField(max_length=10, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    
     # Status
     status = models.CharField(max_length=20, choices=COURT_STATUS_CHOICES, default='active')
     is_available = models.BooleanField(default=True)
@@ -172,6 +194,7 @@ class TimeSlot(models.Model):
     is_available = models.BooleanField(default=True)
     is_blocked = models.BooleanField(default=False)
     block_reason = models.CharField(max_length=200, blank=True)
+    is_recurring = models.BooleanField(default=True, help_text="Whether this time slot repeats daily")
     
     class Meta:
         unique_together = ['court', 'start_time', 'end_time']
@@ -179,6 +202,15 @@ class TimeSlot(models.Model):
     
     def __str__(self):
         return f"{self.court.name} - {self.start_time} to {self.end_time}"
+    
+    @property
+    def duration_hours(self):
+        """Calculate duration in hours"""
+        from datetime import datetime
+        start = datetime.strptime(str(self.start_time), '%H:%M:%S')
+        end = datetime.strptime(str(self.end_time), '%H:%M:%S')
+        duration = end - start
+        return duration.total_seconds() / 3600
 
 class Booking(models.Model):
     """Model for court bookings"""

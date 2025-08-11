@@ -10,6 +10,7 @@ interface User {
   country_code: string;
   is_phone_verified: boolean;
   is_email_verified: boolean;
+  profile_picture?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -25,7 +26,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   getRedirectPath: (userType: string) => string;
   sendOTP: () => Promise<boolean>;
-  verifyEmail: (otp: string) => Promise<boolean>;
+  verifyEmail: (otp: string, email?: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -246,6 +247,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       case 'owner':
         return '/dashboard';
       case 'player':
+        return '/player';
       default:
         return '/';
     }
@@ -272,18 +274,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const verifyEmail = async (otp: string): Promise<boolean> => {
+  const verifyEmail = async (otp: string, email?: string): Promise<boolean> => {
     try {
       // Use temp token if available (for new registrations), otherwise use regular token
       const token = localStorage.getItem('temp_access_token') || localStorage.getItem('access_token');
       
-      const response = await fetch('http://localhost:8000/api/auth/verify-email/', {
+      // Determine which endpoint to use based on authentication status
+      const endpoint = token ? '/api/auth/verify-email/' : '/api/auth/verify-email-without-auth/';
+      
+      const requestBody: any = { otp };
+      if (email) {
+        requestBody.email = email;
+      }
+      
+      const headers: any = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`http://localhost:8000${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ otp }),
+        headers,
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -295,6 +310,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(updatedUser);
           localStorage.setItem('user', JSON.stringify(updatedUser));
         }
+        
+        // If this was a new registration, clear temp tokens and redirect to login
+        if (localStorage.getItem('temp_access_token')) {
+          localStorage.removeItem('temp_access_token');
+          localStorage.removeItem('temp_user');
+          // Redirect to login page after successful verification
+          window.location.href = '/login';
+        }
+        
         return true;
       }
       return false;

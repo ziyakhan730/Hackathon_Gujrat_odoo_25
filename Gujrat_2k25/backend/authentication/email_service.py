@@ -36,6 +36,43 @@ class EmailService:
         return email_otp
     
     @staticmethod
+    def send_email(subject: str, to_email: str, template: str, context: dict, text_fallback: str = "") -> bool:
+        html_message = render_to_string(template, context)
+        try:
+            send_mail(
+                subject=subject,
+                message=text_fallback or html_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[to_email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            return True
+        except Exception as e:
+            print(f"Error sending email: {e}")
+            return False
+    
+    @staticmethod
+    def send_booking_confirmation(player_user, booking):
+        """Email player when booking is confirmed by owner"""
+        subject = 'Your booking has been confirmed - QuickCourt'
+        context = {
+            'user': player_user,
+            'booking': booking,
+        }
+        return EmailService.send_email(subject, player_user.email, 'authentication/email/booking_confirmed.html', context)
+    
+    @staticmethod
+    def send_booking_created_owner(owner_user, booking):
+        """Email owner when a new booking is created by a player"""
+        subject = 'New booking received - QuickCourt'
+        context = {
+            'user': owner_user,
+            'booking': booking,
+        }
+        return EmailService.send_email(subject, owner_user.email, 'authentication/email/booking_created_owner.html', context)
+    
+    @staticmethod
     def send_otp_email(user, otp):
         """Send OTP email to user"""
         subject = 'Verify Your Email - QuickCourt'
@@ -170,11 +207,12 @@ class EmailService:
                 email_otp.is_used = True
                 email_otp.save()
                 
-                # Mark user email as verified
+                # Mark user email as verified and activate account
                 user.is_email_verified = True
+                user.is_active = True  # Activate the user account
                 user.save()
                 
-                return True, "Email verified successfully"
+                return True, "Email verified successfully. Your account is now active!"
             else:
                 if email_otp.is_expired():
                     return False, "OTP has expired"

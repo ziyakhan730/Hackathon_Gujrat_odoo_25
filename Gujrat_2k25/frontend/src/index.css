@@ -206,3 +206,11 @@
     @apply hover:scale-100 hover:translate-y-0;
   }
 }
+
+/* Custom hover classes for player dashboard */
+.hover\:bg-gray-750:hover {
+  background-color: rgb(55 65 81);
+}
+
+/* Tailwind CSS directives - ignore linting errors */
+/* stylelint-disable at-rule-no-unknown */

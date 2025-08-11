@@ -7,17 +7,28 @@ from datetime import datetime, timedelta
 from django.shortcuts import get_object_or_404
 from .models import (
     Facility, FacilityPhoto, Sport, FacilitySport, Amenity, FacilityAmenity,
-    Court, TimeSlot, Booking, CourtRating, Notification
+    Court, CourtPhoto, TimeSlot, Booking, CourtRating, Notification
 )
 from .serializers import (
     SportSerializer, AmenitySerializer, FacilitySerializer, FacilityCreateSerializer,
-    CourtSerializer, CourtCreateSerializer, TimeSlotSerializer, BookingSerializer,
+    CourtSerializer, CourtCreateSerializer, CourtUpdateSerializer, TimeSlotSerializer, BookingSerializer,
     BookingCreateSerializer, CourtRatingSerializer, NotificationSerializer,
     DashboardKPISerializer, BookingTrendSerializer, PeakHourSerializer, RecentBookingSerializer
 )
+from rest_framework.views import APIView
+from django.core.paginator import Paginator
+from django.db.models import Count, Q
+from django.utils import timezone
+from .serializers import BookingUpdateSerializer, BookingCreateSerializer
+from django.conf import settings
+import razorpay
+import hmac
+import hashlib
+import os
+from authentication.email_service import EmailService
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
-    """Custom permission to only allow owners to edit their facilities"""
+    """Custom permission to only allow owners to edit their facilities and courts"""
     
     def has_object_permission(self, request, view, obj):
         # Read permissions for any request
@@ -25,7 +36,19 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
             return True
         
         # Write permissions only for the owner
-        return obj.owner == request.user
+        # Handle different model types
+        if hasattr(obj, 'owner'):
+            # For Facility objects
+            return obj.owner == request.user
+        elif hasattr(obj, 'facility'):
+            # For Court objects
+            return obj.facility.owner == request.user
+        elif hasattr(obj, 'court'):
+            # For TimeSlot objects
+            return obj.court.facility.owner == request.user
+        else:
+            # Default fallback
+            return False
 
 class SportViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for sports"""
@@ -95,7 +118,20 @@ class CourtViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'create':
             return CourtCreateSerializer
+        elif self.action in ['update', 'partial_update']:
+            return CourtUpdateSerializer
         return CourtSerializer
+    
+    @action(detail=True, methods=['post'])
+    def upload_photos(self, request, pk=None):
+        """Upload photos for a court"""
+        court = self.get_object()
+        photos = request.FILES.getlist('photos')
+        
+        for photo in photos:
+            CourtPhoto.objects.create(court=court, image=photo)
+        
+        return Response({'message': f'{len(photos)} photos uploaded successfully'})
     
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
@@ -109,6 +145,20 @@ class CourtViewSet(viewsets.ModelViewSet):
             return Response({'message': f'Court status updated to {status}'})
         
         return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        """Override update method to handle court updates with photos and time slots"""
+        try:
+            print(f"Court update request received for court {kwargs.get('pk')}")
+            print(f"Request data: {request.data}")
+            print(f"Request files: {request.FILES}")
+            
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            print(f"Error in court update: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
 class TimeSlotViewSet(viewsets.ModelViewSet):
     """ViewSet for time slots"""
@@ -138,6 +188,11 @@ class BookingViewSet(viewsets.ModelViewSet):
             return BookingCreateSerializer
         return BookingSerializer
     
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """Update booking status"""
@@ -147,6 +202,12 @@ class BookingViewSet(viewsets.ModelViewSet):
         if new_status in dict(Booking.BOOKING_STATUS_CHOICES):
             booking.status = new_status
             booking.save()
+            # Notify player on confirmation
+            if new_status == 'confirmed':
+                try:
+                    EmailService.send_booking_confirmation(booking.user, booking)
+                except Exception as e:
+                    print(f"Error sending confirmation email: {e}")
             return Response({'message': f'Booking status updated to {new_status}'})
         
         return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
@@ -379,3 +440,378 @@ class DashboardViewSet(viewsets.ViewSet):
             })
         
         return Response(court_stats) 
+
+class PlayerDashboardView(APIView):
+    """API view for player dashboard data"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Get player dashboard statistics and data"""
+        user = request.user
+        
+        # Get user's bookings
+        user_bookings = Booking.objects.filter(user=user)
+        active_bookings = user_bookings.filter(status='confirmed', booking_date__gte=timezone.now().date()).count()
+        total_bookings = user_bookings.count()
+        
+        # Get venues visited (unique venues from bookings)
+        venues_visited = user_bookings.values('court__facility').distinct().count()
+        
+        # Calculate hours played (sum of booking durations)
+        hours_played = sum(booking.duration_hours for booking in user_bookings if booking.duration_hours)
+        
+        # Get recent bookings
+        recent_bookings = user_bookings.order_by('-created_at')[:3]
+        
+        # Get popular venues (venues with most bookings)
+        popular_venues = Facility.objects.filter(
+            courts__bookings__isnull=False
+        ).annotate(
+            booking_count=Count('courts__bookings')
+        ).order_by('-booking_count')[:3]
+        
+        return Response({
+            'success': True,
+            'data': {
+                'stats': {
+                    'active_bookings': active_bookings,
+                    'total_bookings': total_bookings,
+                    'venues_visited': venues_visited,
+                    'hours_played': hours_played
+                },
+                'recent_bookings': BookingSerializer(recent_bookings, many=True).data,
+                'popular_venues': FacilitySerializer(popular_venues, many=True).data
+            }
+        }, status=status.HTTP_200_OK)
+
+class PlayerBookingsView(APIView):
+    """API view for player's bookings"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Get all bookings for the current player"""
+        user = request.user
+        bookings = Booking.objects.filter(user=user).order_by('-created_at')
+        
+        # Apply filters if provided
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            bookings = bookings.filter(status=status_filter)
+        
+        # Apply date filter if provided
+        date_filter = request.query_params.get('date')
+        if date_filter:
+            bookings = bookings.filter(booking_date=date_filter)
+        
+        # Pagination
+        paginator = Paginator(bookings, 10)
+        page_number = request.query_params.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+        
+        return Response({
+            'success': True,
+            'data': {
+                'bookings': BookingSerializer(page_obj, many=True, context={'request': request}).data,
+                'pagination': {
+                    'count': paginator.count,
+                    'pages': paginator.num_pages,
+                    'current_page': page_obj.number,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous()
+                }
+            }
+        }, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        """Create a new booking"""
+        user = request.user
+        serializer = BookingCreateSerializer(data=request.data, context={'user': user})
+        
+        if serializer.is_valid():
+            booking = serializer.save(user=user)
+            return Response({
+                'success': True,
+                'message': 'Booking created successfully',
+                'data': BookingSerializer(booking).data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response({
+            'success': False,
+            'message': 'Booking creation failed',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+class PlayerBookingDetailView(APIView):
+    """API view for individual booking details"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, booking_id):
+        """Get booking details"""
+        try:
+            booking = Booking.objects.get(id=booking_id, user=request.user)
+            return Response({
+                'success': True,
+                'data': BookingSerializer(booking, context={'request': request}).data
+            }, status=status.HTTP_200_OK)
+        except Booking.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Booking not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+    def put(self, request, booking_id):
+        """Update booking"""
+        try:
+            booking = Booking.objects.get(id=booking_id, user=request.user)
+            serializer = BookingUpdateSerializer(booking, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'success': True,
+                    'message': 'Booking updated successfully',
+                    'data': BookingSerializer(booking).data
+                }, status=status.HTTP_200_OK)
+            
+            return Response({
+                'success': False,
+                'message': 'Booking update failed',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Booking.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Booking not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+    def delete(self, request, booking_id):
+        """Cancel booking"""
+        try:
+            booking = Booking.objects.get(id=booking_id, user=request.user)
+            
+            # Check if booking can be cancelled
+            if booking.status == 'cancelled':
+                return Response({
+                    'success': False,
+                    'message': 'Booking is already cancelled'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if booking.booking_date < timezone.now().date():
+                return Response({
+                    'success': False,
+                    'message': 'Cannot cancel past bookings'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            booking.status = 'cancelled'
+            booking.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Booking cancelled successfully'
+            }, status=status.HTTP_200_OK)
+        except Booking.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Booking not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+class PlayerVenuesView(APIView):
+    """API view for venues available to players"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        """Get all available venues with filters"""
+        venues = Facility.objects.filter(is_active=True, courts__isnull=False).order_by('-created_at').distinct()
+        # Only show venues that have at least one active court
+        venues = venues.filter(courts__status='active').distinct()
+        
+        # Exclude obvious test data by default; can be overridden with ?include_test=1
+        include_test = request.query_params.get('include_test') in ['1', 'true', 'True']
+        if not include_test:
+            venues = venues.exclude(
+                Q(name__icontains='test') | Q(description__icontains='test') |
+                Q(name__icontains='dummy') | Q(description__icontains='dummy')
+            )
+        
+        # Apply search filter
+        search_query = request.query_params.get('search')
+        if search_query:
+            venues = venues.filter(
+                Q(name__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(city__icontains=search_query) |
+                Q(address__icontains=search_query) |
+                Q(courts__sport__name__icontains=search_query)
+            ).distinct()
+        
+        # Apply sport filter
+        sport_filter = request.query_params.get('sport')
+        if sport_filter:
+            venues = venues.filter(courts__sport__name__icontains=sport_filter)
+        
+        # Apply price filters
+        price_min = request.query_params.get('price_min')
+        if price_min:
+            venues = venues.filter(courts__price_per_hour__gte=price_min)
+        
+        price_max = request.query_params.get('price_max')
+        if price_max:
+            venues = venues.filter(courts__price_per_hour__lte=price_max)
+        
+        # Apply location filter
+        location_filter = request.query_params.get('location')
+        if location_filter:
+            venues = venues.filter(
+                Q(city__icontains=location_filter) | 
+                Q(address__icontains=location_filter)
+            )
+        
+        # Pagination
+        paginator = Paginator(venues, 12)
+        page_number = request.query_params.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+        
+        return Response({
+            'success': True,
+            'data': {
+                'venues': FacilitySerializer(page_obj, many=True).data,
+                'pagination': {
+                    'count': paginator.count,
+                    'pages': paginator.num_pages,
+                    'current_page': page_obj.number,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous()
+                }
+            }
+        }, status=status.HTTP_200_OK)
+
+class PlayerVenueDetailView(APIView):
+    """API view for individual venue details"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, venue_id):
+        """Get venue details with courts and availability"""
+        try:
+            venue = Facility.objects.get(id=venue_id, is_active=True)
+            
+            # Get courts with availability
+            courts = venue.courts.all()
+            courts_data = []
+            
+            for court in courts:
+                # Get available time slots for today
+                today = timezone.now().date()
+                # Get all time slots for this court
+                all_slots = TimeSlot.objects.filter(court=court, is_available=True).order_by('start_time')
+                
+                # Filter out slots that are already booked
+                available_slots = []
+                for slot in all_slots:
+                    # Check if this time slot is booked for today
+                    is_booked = Booking.objects.filter(
+                        court=court,
+                        booking_date=today,
+                        start_time__lte=slot.start_time,
+                        end_time__gt=slot.start_time,
+                        status__in=['confirmed', 'pending']
+                    ).exists()
+                    
+                    if not is_booked:
+                        available_slots.append(slot)
+                
+                courts_data.append({
+                    'id': court.id,
+                    'name': court.name,
+                    'sport': court.sport.name if court.sport else None,
+                    'price_per_hour': court.price_per_hour,
+                    'description': court.description,
+                    'images': [photo.image.url for photo in court.photos.all()],
+                    'available_slots': TimeSlotSerializer(available_slots, many=True).data
+                })
+            
+            venue_data = FacilitySerializer(venue).data
+            venue_data['courts'] = courts_data
+            
+            return Response({
+                'success': True,
+                'data': venue_data
+            }, status=status.HTTP_200_OK)
+        except Facility.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Venue not found'
+            }, status=status.HTTP_404_NOT_FOUND) 
+
+class PaymentViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_client(self):
+        key_id = os.environ.get('RAZORPAY_KEY_ID', getattr(settings, 'RAZORPAY_KEY_ID', ''))
+        key_secret = os.environ.get('RAZORPAY_KEY_SECRET', getattr(settings, 'RAZORPAY_KEY_SECRET', ''))
+        return razorpay.Client(auth=(key_id, key_secret))
+
+    @action(detail=False, methods=['post'])
+    def create_order(self, request):
+        """Create a Razorpay order based on booking intent (amount in INR paise)."""
+        try:
+            amount = int(request.data.get('amount'))  # amount in paise
+            currency = request.data.get('currency', 'INR')
+            receipt = request.data.get('receipt', f'receipt_{request.user.id}_{timezone.now().timestamp()}')
+            notes = request.data.get('notes', {})
+
+            client = self._get_client()
+            order = client.order.create({
+                'amount': amount,
+                'currency': currency,
+                'receipt': receipt,
+                'payment_capture': 1,
+                'notes': notes,
+            })
+            return Response({'success': True, 'order': order})
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def verify_and_book(self, request):
+        """Verify Razorpay payment signature, then create a booking."""
+        try:
+            # Verify signature
+            order_id = request.data.get('razorpay_order_id')
+            payment_id = request.data.get('razorpay_payment_id')
+            signature = request.data.get('razorpay_signature')
+
+            if not (order_id and payment_id and signature):
+                return Response({'success': False, 'message': 'Missing payment verification fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+            client = self._get_client()
+            params_dict = {
+                'razorpay_order_id': order_id,
+                'razorpay_payment_id': payment_id,
+                'razorpay_signature': signature,
+            }
+            client.utility.verify_payment_signature(params_dict)
+
+            # Create booking
+            booking_payload = {
+                'court': request.data.get('court'),
+                'booking_date': request.data.get('booking_date'),
+                'start_time': request.data.get('start_time'),
+                'end_time': request.data.get('end_time'),
+                'special_requests': request.data.get('special_requests', ''),
+            }
+            serializer = BookingCreateSerializer(data=booking_payload, context={'request': request})
+            if serializer.is_valid():
+                booking = serializer.save()
+                # Notify owner about new booking
+                try:
+                    owner_user = booking.facility.owner
+                    EmailService.send_booking_created_owner(owner_user, booking)
+                except Exception as e:
+                    print(f"Error sending owner booking email: {e}")
+                return Response({'success': True, 'message': 'Booking confirmed', 'data': BookingSerializer(booking).data})
+            else:
+                return Response({'success': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except razorpay.errors.SignatureVerificationError:
+            return Response({'success': False, 'message': 'Payment signature verification failed'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST) 

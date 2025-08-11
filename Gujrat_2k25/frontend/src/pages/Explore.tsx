@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Map, MapMarker } from "@/components/ui/map/Map";
+import { useLocation } from "@/contexts/LocationContext";
 
 export default function Explore() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const { location } = useLocation();
 
   const facilities = [
     {
@@ -21,7 +24,9 @@ export default function Explore() {
       priceFrom: 800,
       location: "Bandra West, Mumbai",
       amenities: ["Parking", "AC", "Locker", "Shower"],
-      availability: "8 slots available today"
+      availability: "8 slots available today",
+      latitude: 19.060, // demo coords
+      longitude: 72.836,
     },
     {
       id: 2,
@@ -34,7 +39,9 @@ export default function Explore() {
       priceFrom: 1200,
       location: "Andheri East, Mumbai",
       amenities: ["Floodlights", "Parking", "Canteen", "First Aid"],
-      availability: "12 slots available today"
+      availability: "12 slots available today",
+      latitude: 19.119,
+      longitude: 72.846,
     },
     {
       id: 3,
@@ -47,9 +54,24 @@ export default function Explore() {
       priceFrom: 1000,
       location: "Powai, Mumbai",
       amenities: ["Pro Shop", "Coaching", "AC", "Lounge"],
-      availability: "6 slots available today"
+      availability: "6 slots available today",
+      latitude: 19.117,
+      longitude: 72.904,
     }
   ];
+
+  const center = location
+    ? { lat: location.latitude, lng: location.longitude }
+    : { lat: 19.076, lng: 72.8777 }; // Mumbai fallback
+
+  const markers: MapMarker[] = facilities
+    .filter(f => typeof f.latitude === 'number' && typeof f.longitude === 'number')
+    .map(f => ({
+      id: f.id,
+      position: { lat: f.latitude!, lng: f.longitude! },
+      title: f.name,
+      description: `${f.location} • ₹${f.priceFrom}/hr • ⭐ ${f.rating}`,
+    }));
 
   return (
     <div className="min-h-screen pt-8">
@@ -126,12 +148,14 @@ export default function Explore() {
         <div className={`grid ${viewMode === 'list' ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 lg:grid-cols-3'} gap-6`}>
           {viewMode === 'map' && (
             <div className="lg:col-span-2">
-              <div className="glass-card h-96 flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Interactive map will be implemented here</p>
-                  <p className="text-sm mt-2">Using React Leaflet integration</p>
-                </div>
+              <div className="glass-card overflow-hidden">
+                <Map
+                  center={center}
+                  zoom={12}
+                  height={400}
+                  useClusters
+                  markers={markers}
+                />
               </div>
             </div>
           )}

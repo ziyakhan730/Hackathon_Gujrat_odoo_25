@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { toast } from "sonner";
+import { CompactUserAvatar } from "@/components/ui/user-avatar";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -94,11 +95,7 @@ export function Header() {
             {isAuthenticated ? (
               <div className="hidden sm:flex items-center space-x-2">
                 <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
-                    <span className="text-primary-foreground font-bold text-sm">
-                      {user?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                    </span>
-                  </div>
+                  <CompactUserAvatar user={user} size="sm" />
                   <div className="hidden lg:block">
                     <p className="text-sm font-medium">{user?.first_name}</p>
                     <p className="text-xs text-muted-foreground capitalize">{user?.user_type}</p>
@@ -154,11 +151,7 @@ export function Header() {
                 <>
                   {/* Navigation links removed - Dashboard and Profile are now accessed through other means */}
                   <div className="flex items-center space-x-2 py-2">
-                    <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
-                      <span className="text-primary-foreground font-bold text-sm">
-                        {user?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                      </span>
-                    </div>
+                    <CompactUserAvatar user={user} size="sm" />
                     <div>
                       <p className="text-sm font-medium">{user?.first_name} {user?.last_name}</p>
                       <p className="text-xs text-muted-foreground capitalize">{user?.user_type}</p>

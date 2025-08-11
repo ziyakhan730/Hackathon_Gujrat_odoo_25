@@ -182,18 +182,108 @@ export const courtsAPI = {
   getById: (id: number) => apiRequest(`/courts/courts/${id}/`),
   
   // Create new court
-  create: (data: any) => 
-    apiRequest('/courts/courts/', {
+  create: (data: any) => {
+    // Use FormData to support file uploads
+    const formData = new FormData();
+
+    const appendField = (key: string, value: any) => {
+      if (value === undefined || value === null || value === '') return;
+      if (key === 'latitude' || key === 'longitude') {
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+          formData.append(key, num.toFixed(6));
+        }
+      } else {
+        formData.append(key, String(value));
+      }
+    };
+
+    Object.keys(data).forEach((key) => {
+      if (key === 'photos' && Array.isArray(data.photos)) {
+        data.photos.forEach((photo: File) => {
+          formData.append('photos', photo);
+        });
+      } else if (key === 'time_slots') {
+        // CourtCreateSerializer expects a JSON string for time_slots
+        formData.append('time_slots', JSON.stringify(data.time_slots || []));
+      } else {
+        appendField(key, data[key]);
+      }
+    });
+
+    return fetch(`${API_BASE_URL}/courts/courts/`, {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+      },
+      body: formData,
+    }).then(handleResponse);
+  },
   
   // Update court
-  update: (id: number, data: any) => 
-    apiRequest(`/courts/courts/${id}/`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+  update: (id: number, data: any) => {
+    // Check if there are files to upload
+    const hasFiles = data.photos && data.photos.length > 0;
+    
+    if (hasFiles) {
+      // Use FormData for file uploads
+      const formData = new FormData();
+
+      const appendField = (key: string, value: any) => {
+        if (value === undefined || value === null || value === '') return;
+        if (key === 'latitude' || key === 'longitude') {
+          const num = Number(value);
+          if (Number.isFinite(num)) {
+            formData.append(key, num.toFixed(6));
+          }
+        } else {
+          formData.append(key, String(value));
+        }
+      };
+      
+      // Add all non-file data
+      Object.keys(data).forEach(key => {
+        if (key === 'photos') {
+          // Add photos as files
+          data.photos.forEach((photo: File, index: number) => {
+            formData.append('photos', photo);
+          });
+        } else if (key === 'time_slots') {
+          // Add time slots as JSON string
+          formData.append('time_slots', JSON.stringify(data.time_slots || []));
+        } else {
+          appendField(key, data[key]);
+        }
+      });
+      
+      return fetch(`${API_BASE_URL}/courts/courts/${id}/`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: formData,
+      }).then(handleResponse);
+    } else {
+      // Use regular JSON for non-file updates; normalize lat/lng precision
+      const payload: any = {
+        ...data,
+        time_slots: Array.isArray(data.time_slots) ? data.time_slots : [],
+      };
+      if (payload.latitude !== undefined && payload.latitude !== null && payload.latitude !== '') {
+        const num = Number(payload.latitude);
+        if (Number.isFinite(num)) payload.latitude = Number(num.toFixed(6));
+      }
+      if (payload.longitude !== undefined && payload.longitude !== null && payload.longitude !== '') {
+        const num = Number(payload.longitude);
+        if (Number.isFinite(num)) payload.longitude = Number(num.toFixed(6));
+      }
+
+      return apiRequest(`/courts/courts/${id}/`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    }
+  },
   
   // Delete court
   delete: (id: number) => 
@@ -215,6 +305,9 @@ export const bookingsAPI = {
   // Get single booking
   getById: (id: number) => apiRequest(`/courts/bookings/${id}/`),
   
+  // Get user bookings
+  getUserBookings: () => apiRequest('/courts/player/bookings/'),
+  
   // Create new booking
   create: (data: any) => 
     apiRequest('/courts/bookings/', {
@@ -229,23 +322,41 @@ export const bookingsAPI = {
       body: JSON.stringify(data),
     }),
   
+  // Cancel booking
+  cancel: (id: number) => 
+    apiRequest(`/courts/player/bookings/${id}/`, {
+      method: 'DELETE',
+    }),
+  
   // Delete booking
   delete: (id: number) => 
     apiRequest(`/courts/bookings/${id}/`, { method: 'DELETE' }),
   
-  // Update booking status
-  updateStatus: (id: number, status: string) => 
+  // Update booking status (owner)
+  updateStatus: (id: number, status: string) =>
     apiRequest(`/courts/bookings/${id}/update_status/`, {
       method: 'POST',
       body: JSON.stringify({ status }),
     }),
-  
-  // Update payment status
-  updatePaymentStatus: (id: number, paymentStatus: string) => 
+
+  // Update payment status (owner)
+  updatePaymentStatus: (id: number, payment_status: string) =>
     apiRequest(`/courts/bookings/${id}/update_payment_status/`, {
       method: 'POST',
-      body: JSON.stringify({ payment_status: paymentStatus }),
+      body: JSON.stringify({ payment_status }),
     }),
+};
+
+// Payments API
+export const paymentsAPI = {
+  createOrder: (amountPaise: number, receipt?: string, notes?: any) => apiRequest('/courts/payments/create_order/', {
+    method: 'POST',
+    body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, notes }),
+  }),
+  verifyAndBook: (payload: any) => apiRequest('/courts/payments/verify_and_book/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
 };
 
 // Sports API
@@ -255,6 +366,56 @@ export const sportsAPI = {
   
   // Get single sport
   getById: (id: number) => apiRequest(`/courts/sports/${id}/`),
+  
+  // Get popular sports
+  getPopular: () => apiRequest('/courts/sports/popular/'),
+};
+
+// Venues API
+export const venuesAPI = {
+  // Get all venues
+  getAll: (params?: string) => apiRequest(`/courts/venues/${params ? `?${params}` : ''}`),
+  
+  // Get single venue
+  getById: (id: number) => apiRequest(`/courts/venues/${id}/`),
+  
+  // Get popular venues
+  getPopular: () => apiRequest('/courts/venues/popular/'),
+};
+
+// Player Dashboard API
+export const playerAPI = {
+  // Get player dashboard data
+  getDashboard: () => apiRequest('/courts/player/dashboard/'),
+  
+  // Get player bookings
+  getBookings: (params?: string) => apiRequest(`/courts/player/bookings/${params ? `?${params}` : ''}`),
+  
+  // Get single booking
+  getBooking: (id: number) => apiRequest(`/courts/player/bookings/${id}/`),
+  
+  // Create booking
+  createBooking: (data: any) => apiRequest('/courts/player/bookings/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  
+  // Update booking
+  updateBooking: (id: number, data: any) => apiRequest(`/courts/player/bookings/${id}/`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  
+  // Cancel booking
+  cancelBooking: (id: number) => apiRequest(`/courts/player/bookings/${id}/`, {
+    method: 'DELETE',
+  }),
+  
+  // Get player venues
+  getVenues: (params?: string) => apiRequest(`/courts/player/venues/${params ? `?${params}` : ''}`),
+  
+  // Get single venue
+  getVenue: (id: number) => apiRequest(`/courts/player/venues/${id}/`),
 };
 
 // Amenities API

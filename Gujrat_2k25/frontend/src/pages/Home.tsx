@@ -5,9 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLocation } from "@/contexts/LocationContext";
 import heroImage from "@/assets/hero-bg.jpg";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 export default function Home() {
   const { location, isLoading, requestLocation } = useLocation();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const [search, setSearch] = useState("");
+  const [date, setDate] = useState("");
   
   const stats = [
     { icon: Users, label: "Active Players", value: "50K+" },
@@ -44,6 +52,20 @@ export default function Home() {
     { name: "Basketball", count: "150+ courts", emoji: "🏀" },
     { name: "Table Tennis", count: "500+ tables", emoji: "🏓" },
   ];
+
+  const handleFindCourts = () => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (location?.city) params.append('location', location.city);
+    if (date) params.append('date', date);
+    const target = `/player/venues?${params.toString()}`;
+
+    if (isAuthenticated) {
+      navigate(target);
+    } else {
+      navigate(`/login?redirect=${encodeURIComponent(target)}`);
+    }
+  };
 
   return (
     <div className="min-h-screen">
@@ -112,6 +134,8 @@ export default function Home() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
                   <Input 
                     placeholder="Search sport or venue" 
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
                     className="pl-10 glass-surface border-glass-border focus:border-primary"
                   />
                 </div>
@@ -128,10 +152,12 @@ export default function Home() {
                   <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
                   <Input 
                     placeholder="Date & Time" 
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
                     className="pl-10 glass-surface border-glass-border focus:border-primary"
                   />
                 </div>
-                <Button variant="hero" size="lg" className="w-full">
+                <Button variant="hero" size="lg" className="w-full" onClick={handleFindCourts}>
                   Find Courts
                   <ArrowRight className="h-5 w-5" />
                 </Button>
@@ -328,7 +354,14 @@ export default function Home() {
               Book your first session now!
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="hero" size="xl">
+              <Button variant="hero" size="xl" onClick={() => {
+                const target = '/player/venues';
+                if (isAuthenticated) {
+                  navigate(target);
+                } else {
+                  navigate(`/login?redirect=${encodeURIComponent(target)}`);
+                }
+              }}>
                 <Zap className="h-5 w-5" />
                 Book Now
               </Button>

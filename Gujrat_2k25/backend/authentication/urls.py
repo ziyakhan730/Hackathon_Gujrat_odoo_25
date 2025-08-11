@@ -23,5 +23,6 @@ urlpatterns = [
     # Email verification
     path('send-otp/', views.SendOTPView.as_view(), name='send-otp'),
     path('verify-email/', views.VerifyEmailView.as_view(), name='verify-email'),
+    path('verify-email-without-auth/', views.VerifyEmailWithoutAuthView.as_view(), name='verify-email-without-auth'),
     path('resend-otp/', views.ResendOTPView.as_view(), name='resend-otp'),
 ] 

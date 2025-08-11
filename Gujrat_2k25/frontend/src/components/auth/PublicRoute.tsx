@@ -11,7 +11,7 @@ export function PublicRoute({
   children, 
   redirectTo = '/dashboard' 
 }: PublicRouteProps) {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, getRedirectPath } = useAuth();
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -24,14 +24,8 @@ export function PublicRoute({
 
   // Redirect authenticated users to dashboard or specified path
   if (isAuthenticated && user) {
-    // Determine redirect path based on user type
-    let redirectPath = redirectTo;
-    if (user.user_type === 'owner') {
-      redirectPath = '/dashboard';
-    } else if (user.user_type === 'player') {
-      redirectPath = '/explore';
-    }
-    
+    // Use getRedirectPath to determine the correct redirect path based on user type
+    const redirectPath = getRedirectPath(user.user_type);
     return <Navigate to={redirectPath} replace />;
   }
 

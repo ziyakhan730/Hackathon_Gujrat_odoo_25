@@ -230,5 +230,9 @@ EMAIL_HOST_USER = 'ziyakhanitm@gmail.com'
 EMAIL_HOST_PASSWORD = 'vgew epwa txso dedw'  # Generate this from Google Account settings
 DEFAULT_FROM_EMAIL = 'QuickCourt <ziyakhanitm@gmail.com>'
 
+# Razorpay test keys (development only)
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', 'rzp_test_v5n8Topc32jGgR')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'wjFlmjfajhTC2t3aSF5u4J8W')
+
 # Frontend URL for password reset
 FRONTEND_URL = 'http://localhost:8080'

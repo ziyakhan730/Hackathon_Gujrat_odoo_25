@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, Clock, DollarSign, Info } from "lucide-react";
+import { X, Plus, Clock, DollarSign, Info, MapPin, Navigation, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,12 @@ interface CourtFormData {
   court_size: string;
   opening_time: string;
   closing_time: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  latitude: string;
+  longitude: string;
 }
 
 export function CourtRegistrationModal({ isOpen, onClose, onSuccess }: CourtRegistrationModalProps) {
@@ -53,6 +59,9 @@ export function CourtRegistrationModal({ isOpen, onClose, onSuccess }: CourtRegi
   const [loading, setLoading] = useState(false);
   const [sportsLoading, setSportsLoading] = useState(false);
   const [facilitiesLoading, setFacilitiesLoading] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [formData, setFormData] = useState<CourtFormData>({
     name: "",
     facility: null,
@@ -65,6 +74,12 @@ export function CourtRegistrationModal({ isOpen, onClose, onSuccess }: CourtRegi
     court_size: "",
     opening_time: "",
     closing_time: "",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
+    latitude: "",
+    longitude: "",
   });
 
   useEffect(() => {
@@ -138,6 +153,115 @@ export function CourtRegistrationModal({ isOpen, onClose, onSuccess }: CourtRegi
     });
   };
 
+  // Geocoding function to convert address to coordinates
+  const geocodeAddress = async () => {
+    const { address, city, state, pincode } = formData;
+    if (!address || !city || !state) {
+      toast.error('Please fill in address, city, and state before geocoding');
+      return;
+    }
+
+    setIsGeocoding(true);
+    try {
+      const fullAddress = `${address}, ${city}, ${state} ${pincode}`.trim();
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=1`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Geocoding request failed');
+      }
+
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        const location = data[0];
+        setFormData(prev => ({
+          ...prev,
+          latitude: Number(location.lat).toFixed(6),
+          longitude: Number(location.lon).toFixed(6)
+        }));
+        toast.success('Coordinates updated from address!');
+      } else {
+        toast.error('Could not find coordinates for this address');
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      toast.error('Failed to geocode address. Please try again.');
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Get current location using GPS
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setFormData(prev => ({
+          ...prev,
+          latitude: latitude.toFixed(6),
+          longitude: longitude.toFixed(6)
+        }));
+        toast.success('Current location coordinates set!');
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        let errorMessage = 'Failed to get current location';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location permission denied. Please enable location access.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information unavailable.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out.';
+            break;
+        }
+        toast.error(errorMessage);
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
+  // Auto-geocode when address fields change
+  useEffect(() => {
+    const { address, city, state } = formData;
+    if (address && city && state && !formData.latitude && !formData.longitude) {
+      // Debounce geocoding to avoid too many requests
+      const timeoutId = setTimeout(() => {
+        geocodeAddress();
+      }, 2000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formData.address, formData.city, formData.state]);
+
+  // Photo handlers
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(e.target.files || []);
+    if (newFiles.length > 0) {
+      setPhotos((prev) => [...prev, ...newFiles]);
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -154,6 +278,9 @@ export function CourtRegistrationModal({ isOpen, onClose, onSuccess }: CourtRegi
         sport: formData.sport,
         opening_time: formData.opening_time || null,
         closing_time: formData.closing_time || null,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+        photos,
       };
 
       await courtsAPI.create(courtData);
@@ -385,6 +512,172 @@ export function CourtRegistrationModal({ isOpen, onClose, onSuccess }: CourtRegi
                         onChange={(e) => handleInputChange('court_size', e.target.value)}
                       />
                     </div>
+                  </div>
+
+                  {/* Address Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Address Information</h3>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Address</Label>
+                      <Textarea
+                        id="address"
+                        placeholder="Enter the full address of the court..."
+                        value={formData.address}
+                        onChange={(e) => handleInputChange('address', e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City</Label>
+                        <Input
+                          id="city"
+                          placeholder="e.g., Mumbai"
+                          value={formData.city}
+                          onChange={(e) => handleInputChange('city', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Input
+                          id="state"
+                          placeholder="e.g., Maharashtra"
+                          value={formData.state}
+                          onChange={(e) => handleInputChange('state', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="pincode">Pincode</Label>
+                        <Input
+                          id="pincode"
+                          placeholder="e.g., 400001"
+                          value={formData.pincode}
+                          onChange={(e) => handleInputChange('pincode', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Location Buttons */}
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={geocodeAddress}
+                        disabled={isGeocoding}
+                        className="flex-1"
+                      >
+                        {isGeocoding ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Geocoding...
+                          </>
+                        ) : (
+                          <>
+                            <MapPin className="h-4 w-4 mr-2" />
+                            Get Coordinates from Address
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={getCurrentLocation}
+                        disabled={isGettingLocation}
+                        className="flex-1"
+                      >
+                        {isGettingLocation ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Getting Location...
+                          </>
+                        ) : (
+                          <>
+                            <Navigation className="h-4 w-4 mr-2" />
+                            Use Current Location
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="latitude">Latitude</Label>
+                        <Input
+                          id="latitude"
+                          type="number"
+                          step="any"
+                          placeholder="Auto-filled from address or GPS"
+                          value={formData.latitude}
+                          onChange={(e) => handleInputChange('latitude', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="longitude">Longitude</Label>
+                        <Input
+                          id="longitude"
+                          type="number"
+                          step="any"
+                          placeholder="Auto-filled from address or GPS"
+                          value={formData.longitude}
+                          onChange={(e) => handleInputChange('longitude', e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Coordinates Status */}
+                    {formData.latitude && formData.longitude && (
+                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center text-green-800">
+                          <MapPin className="h-4 w-4 mr-2" />
+                          <span className="text-sm font-medium">Coordinates Set</span>
+                        </div>
+                        <p className="text-xs text-green-600 mt-1">
+                          {formData.latitude}, {formData.longitude}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Court Photos */}
+                  <div className="space-y-2">
+                    <Label htmlFor="photos">Court Photos</Label>
+                    <Input
+                      id="photos"
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="cursor-pointer"
+                    />
+                    {photos.length > 0 && (
+                      <div className="grid grid-cols-4 gap-4 mt-2">
+                        {photos.map((p, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={URL.createObjectURL(p)}
+                              alt={`Photo ${index + 1}`}
+                              className="w-full h-24 object-cover rounded-lg"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-1 right-1"
+                              onClick={() => removePhoto(index)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
