@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => ({
     extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json']
   },
   optimizeDeps: {
-    include: ['@/components/ui/button', '@/lib/utils', 'clsx', 'tailwind-merge']
+    include: ['clsx', 'tailwind-merge']
   },
   esbuild: {
     logOverride: { 'this-is-undefined-in-esm': 'silent' }

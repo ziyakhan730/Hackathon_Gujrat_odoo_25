@@ -18,6 +18,10 @@ import { PeakHoursChart } from "@/components/dashboard/PeakHoursChart";
 import { CourtRegistrationModal } from "@/components/dashboard/CourtRegistrationModal";
 import { CourtDetailModal } from "@/components/dashboard/CourtDetailModal";
 import { CourtEditModal } from "@/components/dashboard/CourtEditModal";
+import { formatINR } from "../lib/utils";
+import { FacilityDetailModal } from "@/components/dashboard/FacilityDetailModal";
+import { FacilityEditModal } from "@/components/dashboard/FacilityEditModal";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -69,6 +73,10 @@ export default function Dashboard() {
   const [facilityLoading, setFacilityLoading] = useState(false);
   const [sportsAmenitiesLoading, setSportsAmenitiesLoading] = useState(false);
   const [sportsAmenitiesError, setSportsAmenitiesError] = useState<string | null>(null);
+  const [facilitiesList, setFacilitiesList] = useState<any[]>([]);
+  const [facilityModalOpen, setFacilityModalOpen] = useState(false);
+  const [facilityEditOpen, setFacilityEditOpen] = useState(false);
+  const [selectedFacility, setSelectedFacility] = useState<any | null>(null);
 
   // Load dashboard data function
   const loadDashboardData = async () => {
@@ -144,6 +152,15 @@ export default function Dashboard() {
       } finally {
         setCourtsLoading(false);
       }
+
+      // Load owner facilities
+      try {
+        const myFacilities = await facilitiesAPI.getAll();
+        const arr = Array.isArray(myFacilities) ? myFacilities : (myFacilities.results || []);
+        setFacilitiesList(arr);
+      } catch (e) {
+        setFacilitiesList([]);
+      }
       
       // Load bookings
       console.log('Loading bookings...');
@@ -186,6 +203,11 @@ export default function Dashboard() {
   useEffect(() => {
     loadDashboardData();
   }, [selectedPeriod]);
+
+  // Auto-refresh dashboard (every 20s) when tab visible
+  useAutoRefresh(() => {
+    loadDashboardData();
+  }, 20000, true);
 
   // Handler functions
   const handleCourtEdit = async (court: any) => {
@@ -459,7 +481,7 @@ export default function Dashboard() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">₹{kpis.total_earnings.toLocaleString()}</div>
+                  <div className="text-2xl font-bold">{formatINR(kpis.total_earnings)}</div>
                   <p className="text-xs text-muted-foreground">Total earnings</p>
                 </CardContent>
               </Card>
@@ -497,7 +519,34 @@ export default function Dashboard() {
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Facility Management</h2>
             </div>
-            
+
+            {/* Facilities List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Facilities</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {facilitiesList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No facilities found.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {facilitiesList.map((f) => (
+                      <div key={f.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">{f.name}</p>
+                          <p className="text-xs text-muted-foreground">{f.city}, {f.state}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => { setSelectedFacility(f); setFacilityModalOpen(true); }}>View</Button>
+                          <Button size="sm" onClick={() => { setSelectedFacility(f); setFacilityEditOpen(true); }}>Edit</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <form onSubmit={handleFacilitySubmit}>
               <Card>
                 <CardContent className="p-6">
@@ -910,6 +959,15 @@ export default function Dashboard() {
         isOpen={isCourtModalOpen}
         onClose={handleCourtModalClose}
         onSuccess={handleCourtCreated}
+      />
+
+      {/* Facility Modals */}
+      <FacilityDetailModal facility={selectedFacility} isOpen={facilityModalOpen} onClose={() => setFacilityModalOpen(false)} />
+      <FacilityEditModal
+        facility={selectedFacility}
+        isOpen={facilityEditOpen}
+        onClose={() => setFacilityEditOpen(false)}
+        onSaved={() => loadDashboardData()}
       />
 
       {/* Court Detail Modal */}

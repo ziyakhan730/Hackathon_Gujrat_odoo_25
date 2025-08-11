@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CompactUserAvatar } from '@/components/ui/user-avatar';
 import { toast } from 'sonner';
 import { playerAPI } from '@/services/api';
+import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 
 interface PlayerSidebarProps {
   isOpen: boolean;
@@ -83,6 +84,17 @@ export function PlayerSidebar({ isOpen, onToggle }: PlayerSidebarProps) {
     };
     loadStats();
   }, []);
+
+  useAutoRefresh(async () => {
+    try {
+      const res = await playerAPI.getDashboard();
+      if (res && res.success) {
+        setActiveBookings(res.data.stats.active_bookings || 0);
+        setTotalBookings(res.data.stats.total_bookings || 0);
+        setFavoriteVenues(res.data.stats.venues_visited || 0);
+      }
+    } catch {}
+  }, 30000, true);
 
   const handleLogout = async () => {
     try {

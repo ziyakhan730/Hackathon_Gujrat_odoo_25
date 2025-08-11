@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Star, Edit, Eye, MoreVertical, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { formatINR } from "../../lib/utils";
 
 interface Court {
   id: number;
@@ -102,7 +103,7 @@ export function CourtCard({ court, onEdit, onView, onDelete }: CourtCardProps) {
         <div className="space-y-3">
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Price per hour:</span>
-            <span className="font-medium">{court.currency} {court.price_per_hour}</span>
+            <span className="font-medium">{formatINR(court.price_per_hour)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Total bookings:</span>
@@ -117,7 +118,7 @@ export function CourtCard({ court, onEdit, onView, onDelete }: CourtCardProps) {
           </div>
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Total earnings:</span>
-            <span className="text-sm font-medium">{court.currency} {court.total_earnings}</span>
+            <span className="text-sm font-medium">{formatINR(court.total_earnings)}</span>
           </div>
           {court.opening_time && court.closing_time && (
             <div className="flex justify-between">

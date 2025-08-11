@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Clock, Star, Phone, Mail, Globe, Calendar, Users, DollarSign } from 'lucide-react';
+import { formatINR } from '../../lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -218,7 +219,7 @@ export function CourtDetailModal({ court, isOpen, onClose, onEdit }: CourtDetail
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">Total earnings:</span>
-                          <span className="font-medium">{court.currency} {court.total_earnings}</span>
+                          <span className="font-medium">{formatINR(court.total_earnings)}</span>
                         </div>
                       </CardContent>
                     </Card>

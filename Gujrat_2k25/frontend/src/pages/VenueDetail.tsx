@@ -57,8 +57,8 @@ interface Venue {
     review: string;
     created_at: string;
   }>;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | string;
+  longitude?: number | string;
 }
 
 export default function VenueDetail() {
@@ -67,10 +67,14 @@ export default function VenueDetail() {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ bookingId: '', rating: '5', review: '' });
 
   useEffect(() => {
     if (id) {
       loadVenueDetails();
+      loadReviews();
     }
   }, [id]);
 
@@ -91,10 +95,52 @@ export default function VenueDetail() {
     }
   };
 
+  const loadReviews = async () => {
+    try {
+      setLoadingReviews(true);
+      const res = await playerAPI.getVenueReviews(parseInt(id!));
+      if (res && res.success) {
+        setReviews(res.data || []);
+      } else {
+        setReviews([]);
+      }
+    } catch (e) {
+      setReviews([]);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!reviewForm.bookingId) {
+      toast.error('Enter your booking ID for this venue');
+      return;
+    }
+    try {
+      const resp = await playerAPI.createReview(parseInt(reviewForm.bookingId), parseInt(reviewForm.rating), reviewForm.review);
+      if (resp && resp.success) {
+        toast.success('Review submitted');
+        setReviewForm({ bookingId: '', rating: '5', review: '' });
+        loadReviews();
+      } else {
+        toast.error(resp?.message || 'Failed to submit review');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to submit review');
+    }
+  };
+
   const handleBookNow = () => {
     if (venue) {
       navigate(`/player/venues/${venue.id}/book`);
     }
+  };
+
+  const hasCoords = (v?: Venue | null) => {
+    if (!v) return false;
+    const lat = Number(v.latitude);
+    const lng = Number(v.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng);
   };
 
   if (loading) {
@@ -224,7 +270,7 @@ export default function VenueDetail() {
                       </div>
                     </div>
 
-                    {typeof venue.latitude === 'number' && typeof venue.longitude === 'number' && (
+                    {hasCoords(venue) && (
                       <div className="mt-6">
                         <h3 className="font-semibold text-lg mb-3">Location</h3>
                         <Map
@@ -238,6 +284,28 @@ export default function VenueDetail() {
                             description: `${venue.address}, ${venue.city}, ${venue.state} ${venue.pincode}`,
                           }]}
                         />
+                        <div className="flex gap-2 mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const url = `https://www.google.com/maps/dir/?api=1&destination=${Number(venue.latitude)},${Number(venue.longitude)}`;
+                              window.open(url, '_blank');
+                            }}
+                          >
+                            Open in Google Maps
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const url = `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${Number(venue.latitude)}%2C${Number(venue.longitude)}`;
+                              window.open(url, '_blank');
+                            }}
+                          >
+                            Open in OpenStreetMap
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -311,13 +379,15 @@ export default function VenueDetail() {
                     <CardTitle>Customer Reviews</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {(venue.reviews || []).length > 0 ? (
+                    {loadingReviews ? (
+                      <div className="text-center py-8 text-gray-500">Loading reviews...</div>
+                    ) : reviews.length > 0 ? (
                       <div className="space-y-4">
-                        {venue.reviews.map((review) => (
+                        {reviews.map((review) => (
                           <div key={review.id} className="border-b pb-4 last:border-b-0">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center">
-                                <span className="font-semibold">{review.user_name}</span>
+                                <span className="font-semibold">{review.user}</span>
                                 <div className="flex items-center ml-2">
                                   {Array.from({ length: 5 }, (_, i) => (
                                     <Star
@@ -341,6 +411,39 @@ export default function VenueDetail() {
                         <p>No reviews yet. Be the first to review this venue!</p>
                       </div>
                     )}
+
+                    {/* Add Review */}
+                    <div className="mt-6 border-t pt-4">
+                      <h4 className="font-semibold mb-2">Add Your Review</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <input
+                          className="border rounded px-2 py-1 bg-white text-black placeholder-gray-600"
+                          placeholder="Your Booking ID"
+                          value={reviewForm.bookingId}
+                          onChange={(e) => setReviewForm({ ...reviewForm, bookingId: e.target.value })}
+                        />
+                        <select
+                          className="border rounded px-2 py-1 bg-white text-black"
+                          value={reviewForm.rating}
+                          onChange={(e) => setReviewForm({ ...reviewForm, rating: e.target.value })}
+                        >
+                          <option value="5">5</option>
+                          <option value="4">4</option>
+                          <option value="3">3</option>
+                          <option value="2">2</option>
+                          <option value="1">1</option>
+                        </select>
+                        <input
+                          className="border rounded px-2 py-1 md:col-span-2 bg-white text-black placeholder-gray-600"
+                          placeholder="Write a short review"
+                          value={reviewForm.review}
+                          onChange={(e) => setReviewForm({ ...reviewForm, review: e.target.value })}
+                        />
+                      </div>
+                      <div className="mt-3">
+                        <Button size="sm" onClick={submitReview}>Submit Review</Button>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

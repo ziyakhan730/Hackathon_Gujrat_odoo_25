@@ -5,7 +5,7 @@ from .views import (
     TimeSlotViewSet, BookingViewSet, CourtRatingViewSet, NotificationViewSet,
     DashboardViewSet, PlayerDashboardView, PlayerBookingsView, 
     PlayerBookingDetailView, PlayerVenuesView, PlayerVenueDetailView,
-    PaymentViewSet
+    PaymentViewSet, PlayerVenueReviewsView, PlayerCreateReviewView
 )
 
 router = DefaultRouter()
@@ -29,4 +29,6 @@ urlpatterns = [
     path('player/bookings/<int:booking_id>/', PlayerBookingDetailView.as_view(), name='player-booking-detail'),
     path('player/venues/', PlayerVenuesView.as_view(), name='player-venues'),
     path('player/venues/<int:venue_id>/', PlayerVenueDetailView.as_view(), name='player-venue-detail'),
+    path('player/venues/<int:venue_id>/reviews/', PlayerVenueReviewsView.as_view(), name='player-venue-reviews'),
+    path('player/bookings/<int:booking_id>/review/', PlayerCreateReviewView.as_view(), name='player-create-review'),
 ] 

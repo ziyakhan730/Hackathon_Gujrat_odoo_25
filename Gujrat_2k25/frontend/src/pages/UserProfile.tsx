@@ -14,22 +14,13 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { bookingsAPI, authAPI } from '@/services/api';
 import { format } from 'date-fns';
+import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 
 interface Booking {
   id: number;
   booking_id: string;
-  court: {
-    id: number;
-    name: string;
-    sport: string;
-  };
-  facility: {
-    id: number;
-    name: string;
-    address: string;
-    city: string;
-    state: string;
-  };
+  court: any;
+  facility: any;
   booking_date: string;
   start_time: string;
   end_time: string;
@@ -71,6 +62,10 @@ export default function UserProfile() {
   useEffect(() => {
     loadUserBookings();
   }, []);
+
+  useAutoRefresh(() => {
+    loadUserBookings();
+  }, 25000, true);
 
   const loadUserBookings = async () => {
     try {
@@ -345,9 +340,9 @@ export default function UserProfile() {
                       >
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-semibold text-lg">{booking.facility.name}</h3>
+                            <h3 className="font-semibold text-lg">{booking.facility?.name || booking.facility}</h3>
                             <p className="text-gray-600 text-sm">
-                              {booking.court.name} • {booking.court.sport}
+                              {(booking.court?.name || booking.court)}{booking.court?.sport ? ` • ${booking.court.sport}` : ''}
                             </p>
                           </div>
                           <div className="text-right">
@@ -405,7 +400,7 @@ export default function UserProfile() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2 text-sm text-gray-600">
                             <MapPin className="h-4 w-4" />
-                            <span>{booking.facility.address}, {booking.facility.city}, {booking.facility.state}</span>
+                            <span>{booking.facility?.address || ''}{booking.facility?.city ? `, ${booking.facility.city}` : ''}{booking.facility?.state ? `, ${booking.facility.state}` : ''}</span>
                           </div>
                           {canCancelBooking(booking) && (
                             <Button

@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Count, Sum, Avg, Q
+from django.db.models import Count, Sum, Avg, Q, Case, When, F, DecimalField
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.shortcuts import get_object_or_404
@@ -286,10 +286,13 @@ class DashboardViewSet(viewsets.ViewSet):
         # Calculate KPIs
         total_bookings = Booking.objects.filter(facility__in=facilities).count()
         active_courts = Court.objects.filter(facility__in=facilities, status='active').count()
-        total_earnings = Booking.objects.filter(
-            facility__in=facilities, 
-            payment_status='paid'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        # Earnings: include ONLY owner-approved bookings (confirmed or completed)
+        total_earnings = (
+            Booking.objects
+            .filter(facility__in=facilities, status__in=['confirmed', 'completed'])
+            .aggregate(total=Sum('total_amount'))['total']
+            or 0
+        )
         pending_bookings = Booking.objects.filter(
             facility__in=facilities, 
             status='pending'
@@ -332,13 +335,25 @@ class DashboardViewSet(viewsets.ViewSet):
             start_date = timezone.now().date() - timedelta(days=7)
         
         # Get booking trends
-        bookings = Booking.objects.filter(
-            facility__in=facilities,
-            booking_date__gte=start_date
-        ).values('booking_date').annotate(
-            bookings=Count('id'),
-            earnings=Sum('total_amount')
-        ).order_by('booking_date')
+        bookings = (
+            Booking.objects
+            .filter(
+                facility__in=facilities,
+                booking_date__gte=start_date,
+            )
+            .values('booking_date')
+            .annotate(
+                bookings=Count('id'),
+                earnings=Sum(
+                    Case(
+                        When(status__in=['confirmed', 'completed'], then=F('total_amount')),
+                        default=0,
+                        output_field=DecimalField(max_digits=10, decimal_places=2)
+                    )
+                )
+            )
+            .order_by('booking_date')
+        )
         
         trends_data = []
         for booking in bookings:
@@ -674,7 +689,7 @@ class PlayerVenuesView(APIView):
         return Response({
             'success': True,
             'data': {
-                'venues': FacilitySerializer(page_obj, many=True).data,
+                'venues': FacilitySerializer(page_obj, many=True, context={'request': request}).data,
                 'pagination': {
                     'count': paginator.count,
                     'pages': paginator.num_pages,
@@ -711,7 +726,7 @@ class PlayerVenueDetailView(APIView):
                     is_booked = Booking.objects.filter(
                         court=court,
                         booking_date=today,
-                        start_time__lte=slot.start_time,
+                        start_time__lt=slot.end_time,
                         end_time__gt=slot.start_time,
                         status__in=['confirmed', 'pending']
                     ).exists()
@@ -725,12 +740,21 @@ class PlayerVenueDetailView(APIView):
                     'sport': court.sport.name if court.sport else None,
                     'price_per_hour': court.price_per_hour,
                     'description': court.description,
-                    'images': [photo.image.url for photo in court.photos.all()],
+                    'images': [request.build_absolute_uri(photo.image.url) for photo in court.photos.all()],
+                    'latitude': court.latitude,
+                    'longitude': court.longitude,
                     'available_slots': TimeSlotSerializer(available_slots, many=True).data
                 })
             
-            venue_data = FacilitySerializer(venue).data
+            venue_data = FacilitySerializer(venue, context={'request': request}).data
             venue_data['courts'] = courts_data
+            # Fallback: if facility doesn't have coords, use first court with coords
+            if not venue_data.get('latitude') or not venue_data.get('longitude'):
+                for c in courts_data:
+                    if c.get('latitude') and c.get('longitude'):
+                        venue_data['latitude'] = c['latitude']
+                        venue_data['longitude'] = c['longitude']
+                        break
             
             return Response({
                 'success': True,
@@ -741,6 +765,49 @@ class PlayerVenueDetailView(APIView):
                 'success': False,
                 'message': 'Venue not found'
             }, status=status.HTTP_404_NOT_FOUND) 
+
+class PlayerVenueReviewsView(APIView):
+    """List reviews for a venue (all courts under the facility)"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, venue_id):
+        try:
+            venue = Facility.objects.get(id=venue_id, is_active=True)
+            ratings = CourtRating.objects.filter(court__facility=venue).order_by('-created_at')
+            data = CourtRatingSerializer(ratings, many=True).data
+            return Response({'success': True, 'data': data}, status=status.HTTP_200_OK)
+        except Facility.DoesNotExist:
+            return Response({'success': False, 'message': 'Venue not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class PlayerCreateReviewView(APIView):
+    """Create a review for a court using a past booking"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, booking_id):
+        try:
+            booking = Booking.objects.get(id=booking_id, user=request.user)
+            # Optional: ensure booking is completed
+            # if booking.status != 'completed':
+            #     return Response({'success': False, 'message': 'You can only review completed bookings'}, status=400)
+            # Prevent duplicate review for the same booking
+            if hasattr(booking, 'rating'):
+                return Response({'success': False, 'message': 'You have already reviewed this booking'}, status=400)
+
+            rating_value = int(request.data.get('rating', 0))
+            review_text = request.data.get('review', '')
+            if rating_value < 1 or rating_value > 5:
+                return Response({'success': False, 'message': 'Rating must be between 1 and 5'}, status=400)
+
+            rating = CourtRating.objects.create(
+                booking=booking,
+                court=booking.court,
+                user=request.user,
+                rating=rating_value,
+                review=review_text
+            )
+            return Response({'success': True, 'data': CourtRatingSerializer(rating).data}, status=status.HTTP_201_CREATED)
+        except Booking.DoesNotExist:
+            return Response({'success': False, 'message': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
 
 class PaymentViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]

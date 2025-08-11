@@ -22,12 +22,32 @@ class AmenitySerializer(serializers.ModelSerializer):
 
 class FacilityPhotoSerializer(serializers.ModelSerializer):
     """Serializer for facility photos"""
+    image = serializers.SerializerMethodField()
+    
+    def get_image(self, obj):
+        try:
+            request = self.context.get('request') if hasattr(self, 'context') else None
+            url = obj.image.url
+            return request.build_absolute_uri(url) if request else url
+        except Exception:
+            return None
+    
     class Meta:
         model = FacilityPhoto
         fields = ['id', 'image', 'caption', 'is_primary', 'created_at']
 
 class CourtPhotoSerializer(serializers.ModelSerializer):
     """Serializer for court photos"""
+    image = serializers.SerializerMethodField()
+    
+    def get_image(self, obj):
+        try:
+            request = self.context.get('request') if hasattr(self, 'context') else None
+            url = obj.image.url
+            return request.build_absolute_uri(url) if request else url
+        except Exception:
+            return None
+    
     class Meta:
         model = CourtPhoto
         fields = ['id', 'image', 'caption', 'is_primary', 'created_at']
@@ -84,8 +104,16 @@ class FacilitySerializer(serializers.ModelSerializer):
         return [amenity.amenity.name for amenity in obj.facility_amenities.all()]
     
     def get_images(self, obj):
-        """Get list of photo URLs"""
-        return [photo.image.url for photo in obj.photos.all()]
+        """Get list of photo URLs (absolute)"""
+        request = self.context.get('request') if hasattr(self, 'context') else None
+        urls = []
+        for photo in obj.photos.all():
+            try:
+                url = photo.image.url
+                urls.append(request.build_absolute_uri(url) if request else url)
+            except Exception:
+                continue
+        return urls
     
     def get_total_courts(self, obj):
         return obj.courts.count()
@@ -387,14 +415,22 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_court_image(self, obj):
         try:
             photo = obj.court.photos.order_by('-is_primary', '-created_at').first()
-            return photo.image.url if photo else None
+            if not photo:
+                return None
+            url = photo.image.url
+            request = self.context.get('request') if hasattr(self, 'context') else None
+            return request.build_absolute_uri(url) if request else url
         except Exception:
             return None
 
     def get_facility_image(self, obj):
         try:
             photo = obj.facility.photos.order_by('-is_primary', '-created_at').first()
-            return photo.image.url if photo else None
+            if not photo:
+                return None
+            url = photo.image.url
+            request = self.context.get('request') if hasattr(self, 'context') else None
+            return request.build_absolute_uri(url) if request else url
         except Exception:
             return None
 

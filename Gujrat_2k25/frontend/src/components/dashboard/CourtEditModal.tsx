@@ -96,6 +96,7 @@ export function CourtEditModal({ court, isOpen, onClose, onSave, sports }: Court
   });
 
   const [photos, setPhotos] = useState<File[]>([]);
+  const [coverIndex, setCoverIndex] = useState<number>(0);
   const [timeSlots, setTimeSlots] = useState<Array<{ start_time: string; end_time: string; is_available: boolean }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -154,11 +155,20 @@ export function CourtEditModal({ court, isOpen, onClose, onSave, sports }: Court
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setPhotos(prev => [...prev, ...files]);
+    setPhotos(prev => {
+      const merged = [...prev, ...files];
+      if (merged.length > 0 && coverIndex >= merged.length) setCoverIndex(0);
+      return merged;
+    });
   };
 
   const removePhoto = (index: number) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
+    setPhotos(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      if (index === coverIndex) setCoverIndex(0);
+      else if (index < coverIndex) setCoverIndex(Math.max(0, coverIndex - 1));
+      return next;
+    });
   };
 
   const addTimeSlot = () => {
@@ -292,7 +302,15 @@ export function CourtEditModal({ court, isOpen, onClose, onSave, sports }: Court
         price_per_hour: parseFloat(formData.price_per_hour),
         latitude: formData.latitude ? parseFloat(formData.latitude) : null,
         longitude: formData.longitude ? parseFloat(formData.longitude) : null,
-        photos,
+        photos: (() => {
+          if (photos.length === 0) return photos;
+          const arranged = [...photos];
+          if (coverIndex >= 0 && coverIndex < arranged.length) {
+            const [cover] = arranged.splice(coverIndex, 1);
+            arranged.unshift(cover);
+          }
+          return arranged;
+        })(),
         time_slots: timeSlots.filter(slot => slot.start_time && slot.end_time)
       };
 
@@ -625,17 +643,31 @@ export function CourtEditModal({ court, isOpen, onClose, onSave, sports }: Court
                             <img
                               src={URL.createObjectURL(photo)}
                               alt={`Photo ${index + 1}`}
-                              className="w-full h-24 object-cover rounded-lg"
+                              className="w-full h-24 object-cover rounded-lg border"
                             />
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="absolute top-1 right-1"
-                              onClick={() => removePhoto(index)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            {coverIndex === index && (
+                              <span className="absolute bottom-1 left-1 bg-green-600 text-white text-[10px] px-1.5 py-0.5 rounded">Cover</span>
+                            )}
+                            <div className="absolute top-1 right-1 flex gap-1">
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="h-6 px-2"
+                                onClick={() => removePhoto(index)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={coverIndex === index ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-6 px-2"
+                                onClick={() => setCoverIndex(index)}
+                              >
+                                {coverIndex === index ? 'Cover' : 'Make cover'}
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>

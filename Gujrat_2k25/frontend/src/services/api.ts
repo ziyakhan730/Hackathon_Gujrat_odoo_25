@@ -416,6 +416,13 @@ export const playerAPI = {
   
   // Get single venue
   getVenue: (id: number) => apiRequest(`/courts/player/venues/${id}/`),
+
+  // Reviews
+  getVenueReviews: (venueId: number) => apiRequest(`/courts/player/venues/${venueId}/reviews/`),
+  createReview: (bookingId: number, rating: number, review: string) => apiRequest(`/courts/player/bookings/${bookingId}/review/`, {
+    method: 'POST',
+    body: JSON.stringify({ rating, review }),
+  }),
 };
 
 // Amenities API
