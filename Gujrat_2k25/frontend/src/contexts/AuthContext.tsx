@@ -10,6 +10,8 @@ interface User {
   country_code: string;
   is_phone_verified: boolean;
   is_email_verified: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface AuthContextType {
@@ -20,7 +22,10 @@ interface AuthContextType {
   register: (userData: any) => Promise<boolean>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
+  setUser: (user: User | null) => void;
   getRedirectPath: (userType: string) => string;
+  sendOTP: () => Promise<boolean>;
+  verifyEmail: (otp: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,6 +45,9 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Calculate isAuthenticated based on user state
+  const isAuthenticated = !!user;
 
   // Check if user is authenticated on app load
   useEffect(() => {
@@ -49,6 +57,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuthStatus = async () => {
     const token = localStorage.getItem('access_token');
     const userData = localStorage.getItem('user');
+
+    console.log('Checking auth status...', { hasToken: !!token, hasUserData: !!userData });
 
     if (token && userData) {
       try {
@@ -60,10 +70,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           },
         });
 
+        console.log('Auth check response status:', response.status);
+
         if (response.ok) {
           const data = await response.json();
+          console.log('Auth check successful:', data);
           setUser(data.data);
         } else {
+          console.log('Token invalid, clearing storage');
           // Token is invalid, clear storage
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
@@ -78,12 +92,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('user');
         setUser(null);
       }
+    } else {
+      // Check for temporary tokens (for email verification flow)
+      const tempToken = localStorage.getItem('temp_access_token');
+      const tempUserData = localStorage.getItem('temp_user');
+      
+      if (tempToken && tempUserData) {
+        console.log('Temporary tokens found - user in email verification flow');
+        // User is in email verification flow, don't set as authenticated yet
+        setUser(null);
+      } else {
+        console.log('No token or user data found');
+        setUser(null);
+      }
     }
     setIsLoading(false);
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      console.log('Attempting login with:', { email, password });
+      
       const response = await fetch('http://localhost:8000/api/auth/login/', {
         method: 'POST',
         headers: {
@@ -92,16 +121,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log('Login response status:', response.status);
+      
       const data = await response.json();
+      console.log('Login response data:', data);
 
       if (response.ok && data.success) {
         localStorage.setItem('access_token', data.data.tokens.access);
         localStorage.setItem('refresh_token', data.data.tokens.refresh);
         localStorage.setItem('user', JSON.stringify(data.data.user));
         setUser(data.data.user);
+        console.log('Login successful, user set:', data.data.user);
         return true;
+      } else {
+        // Log the error details
+        console.error('Login failed:', data);
+        return false;
       }
-      return false;
     } catch (error) {
       console.error('Login error:', error);
       return false;
@@ -110,6 +146,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (userData: any): Promise<boolean> => {
     try {
+      console.log('Registration data:', userData);
+      
       const response = await fetch('http://localhost:8000/api/auth/register/', {
         method: 'POST',
         headers: {
@@ -119,12 +157,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       const data = await response.json();
+      console.log('Registration response:', data);
 
       if (response.ok && data.success) {
-        localStorage.setItem('access_token', data.data.tokens.access);
-        localStorage.setItem('refresh_token', data.data.tokens.refresh);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        setUser(data.data.user);
+        // Store tokens temporarily for email verification
+        console.log('Storing temporary tokens...');
+        console.log('Access token:', data.data.tokens.access);
+        console.log('Refresh token:', data.data.tokens.refresh);
+        console.log('User data:', data.data.user);
+        
+        localStorage.setItem('temp_access_token', data.data.tokens.access);
+        localStorage.setItem('temp_refresh_token', data.data.tokens.refresh);
+        localStorage.setItem('temp_user', JSON.stringify(data.data.user));
+        
+        // Verify tokens were stored
+        console.log('Stored temp access token:', localStorage.getItem('temp_access_token'));
+        console.log('Stored temp refresh token:', localStorage.getItem('temp_refresh_token'));
+        console.log('Stored temp user:', localStorage.getItem('temp_user'));
+        
+        // Don't set user as authenticated yet - they need to verify email first
         return true;
       }
       return false;
@@ -136,20 +187,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     const refreshToken = localStorage.getItem('refresh_token');
+    const accessToken = localStorage.getItem('access_token');
     
-    if (refreshToken) {
+    if (refreshToken && accessToken) {
       try {
+        console.log('Attempting logout...');
+        console.log('Refresh token:', refreshToken);
+        
         // Call logout endpoint to blacklist token
-        await fetch('http://localhost:8000/api/auth/logout/', {
+        const response = await fetch('http://localhost:8000/api/auth/logout/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
+        
+        console.log('Logout response status:', response.status);
+        
+        if (response.ok) {
+          console.log('Logout successful');
+        } else {
+          const errorData = await response.json();
+          console.warn('Logout API call failed:', errorData);
+          // Continue with logout even if API call fails
+        }
       } catch (error) {
         console.error('Logout error:', error);
+        // Continue with logout even if API call fails
       }
+    } else {
+      console.log('No tokens found, proceeding with local logout');
     }
 
     // Clear local storage
@@ -157,6 +226,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     setUser(null);
+    
+    console.log('Local logout completed');
+    
+    // Force redirect to login page
+    window.location.href = '/login';
   };
 
   const updateUser = (userData: Partial<User>) => {
@@ -177,6 +251,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const sendOTP = async (): Promise<boolean> => {
+    try {
+      // Use temp token if available (for new registrations), otherwise use regular token
+      const token = localStorage.getItem('temp_access_token') || localStorage.getItem('access_token');
+      
+      const response = await fetch('http://localhost:8000/api/auth/send-otp/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      return response.ok && data.success;
+    } catch (error) {
+      console.error('Send OTP error:', error);
+      return false;
+    }
+  };
+
+  const verifyEmail = async (otp: string): Promise<boolean> => {
+    try {
+      // Use temp token if available (for new registrations), otherwise use regular token
+      const token = localStorage.getItem('temp_access_token') || localStorage.getItem('access_token');
+      
+      const response = await fetch('http://localhost:8000/api/auth/verify-email/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ otp }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Update user's email verification status
+        if (user) {
+          const updatedUser = { ...user, is_email_verified: true };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Verify email error:', error);
+      return false;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -185,7 +312,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     updateUser,
+    setUser,
     getRedirectPath,
+    sendOTP,
+    verifyEmail,
   };
 
   return (

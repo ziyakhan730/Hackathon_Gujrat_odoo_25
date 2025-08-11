@@ -1,138 +1,186 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { 
-  Calendar, 
-  DollarSign, 
-  Users, 
-  Building, 
-  TrendingUp, 
-  Clock, 
-  Plus,
-  Edit,
-  Eye,
-  Star,
-  CheckCircle,
-  XCircle,
-  AlertCircle
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/contexts/AuthContext";
+import { Plus, Calendar, Building, DollarSign, Clock, Edit } from "lucide-react";
 import { toast } from "sonner";
-import { BookingTrendsChart } from "@/components/dashboard/BookingTrendsChart";
-import { PeakHoursChart } from "@/components/dashboard/PeakHoursChart";
+import { dashboardAPI, courtsAPI, bookingsAPI, sportsAPI, amenitiesAPI, facilitiesAPI } from "@/services/api";
 import { CourtCard } from "@/components/dashboard/CourtCard";
 import { BookingTable } from "@/components/dashboard/BookingTable";
-
-// Mock data for demonstration
-const mockBookingTrends = [
-  { date: '2024-01-01', bookings: 15, earnings: 2500 },
-  { date: '2024-01-02', bookings: 18, earnings: 3000 },
-  { date: '2024-01-03', bookings: 22, earnings: 3700 },
-  { date: '2024-01-04', bookings: 19, earnings: 3200 },
-  { date: '2024-01-05', bookings: 25, earnings: 4200 },
-  { date: '2024-01-06', bookings: 28, earnings: 4700 },
-  { date: '2024-01-07', bookings: 31, earnings: 5200 },
-];
-
-const mockPeakHours = [
-  { hour: '6-8', bookings: 5, percentage: 8 },
-  { hour: '8-10', bookings: 12, percentage: 19 },
-  { hour: '10-12', bookings: 18, percentage: 29 },
-  { hour: '12-14', bookings: 15, percentage: 24 },
-  { hour: '14-16', bookings: 8, percentage: 13 },
-  { hour: '16-18', bookings: 22, percentage: 35 },
-  { hour: '18-20', bookings: 28, percentage: 45 },
-  { hour: '20-22', bookings: 20, percentage: 32 },
-];
-
-const mockCourts = [
-  {
-    id: 1,
-    name: "Court A - Basketball",
-    sport: "Basketball",
-    status: "active" as const,
-    price: 800,
-    bookings: 45,
-    rating: 4.5,
-    operatingHours: "6:00 AM - 10:00 PM",
-    amenities: ["Parking", "Changing Rooms", "Equipment Rental"]
-  },
-  {
-    id: 2,
-    name: "Court B - Tennis",
-    sport: "Tennis",
-    status: "active" as const,
-    price: 1200,
-    bookings: 38,
-    rating: 4.8,
-    operatingHours: "6:00 AM - 10:00 PM",
-    amenities: ["Parking", "Changing Rooms", "Cafeteria"]
-  },
-  {
-    id: 3,
-    name: "Court C - Badminton",
-    sport: "Badminton",
-    status: "maintenance" as const,
-    price: 600,
-    bookings: 52,
-    rating: 4.3,
-    operatingHours: "6:00 AM - 10:00 PM",
-    amenities: ["Parking", "WiFi"]
-  }
-];
-
-const mockBookings = [
-  {
-    id: 1,
-    userName: "Rahul Sharma",
-    userEmail: "rahul@example.com",
-    courtName: "Court A - Basketball",
-    date: "2024-01-15",
-    time: "18:00-20:00",
-    status: "confirmed" as const,
-    amount: 1600,
-    paymentStatus: "paid" as const,
-    createdAt: "2024-01-10T10:00:00Z"
-  },
-  {
-    id: 2,
-    userName: "Priya Patel",
-    userEmail: "priya@example.com",
-    courtName: "Court B - Tennis",
-    date: "2024-01-15",
-    time: "16:00-18:00",
-    status: "pending" as const,
-    amount: 2400,
-    paymentStatus: "pending" as const,
-    createdAt: "2024-01-11T14:30:00Z"
-  },
-  {
-    id: 3,
-    userName: "Amit Kumar",
-    userEmail: "amit@example.com",
-    courtName: "Court A - Basketball",
-    date: "2024-01-14",
-    time: "20:00-22:00",
-    status: "completed" as const,
-    amount: 1600,
-    paymentStatus: "paid" as const,
-    createdAt: "2024-01-09T16:45:00Z"
-  }
-];
+import { BookingTrendsChart } from "@/components/dashboard/BookingTrendsChart";
+import { PeakHoursChart } from "@/components/dashboard/PeakHoursChart";
+import { CourtRegistrationModal } from "@/components/dashboard/CourtRegistrationModal";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedPeriod, setSelectedPeriod] = useState("week");
+  const [isCourtModalOpen, setIsCourtModalOpen] = useState(false);
+  
+  // State for real data
+  const [kpis, setKpis] = useState({
+    total_bookings: 0,
+    active_courts: 0,
+    total_earnings: 0,
+    pending_bookings: 0
+  });
+  const [bookingTrends, setBookingTrends] = useState([]);
+  const [peakHours, setPeakHours] = useState([]);
+  const [courts, setCourts] = useState([]);
+  const [courtsLoading, setCourtsLoading] = useState(false);
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [hasFacilities, setHasFacilities] = useState(false);
+  
+  // Facility form state
+  const [facilityForm, setFacilityForm] = useState({
+    name: '',
+    description: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    phone: '',
+    email: '',
+    website: '',
+    capacity: '',
+    parking_spaces: '',
+    year_established: '',
+    opening_time: '',
+    closing_time: '',
+    selectedSports: [] as number[],
+    selectedAmenities: [] as number[],
+    photos: [] as File[]
+  });
+  const [sports, setSports] = useState<any[]>([]);
+  const [amenities, setAmenities] = useState<any[]>([]);
+  const [facilityLoading, setFacilityLoading] = useState(false);
+  const [sportsAmenitiesLoading, setSportsAmenitiesLoading] = useState(false);
+  const [sportsAmenitiesError, setSportsAmenitiesError] = useState<string | null>(null);
 
-  // Dashboard is now protected by ProtectedRoute component
-  // No need for manual user type checking here
+  // Load dashboard data function
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Loading dashboard data...');
+      console.log('Auth token:', localStorage.getItem('access_token'));
+      console.log('User:', user);
+      
+      // Load KPIs
+      console.log('Loading KPIs...');
+      try {
+        const kpisData = await dashboardAPI.getKPIs();
+        console.log('KPIs data:', kpisData);
+        setKpis(kpisData);
+      } catch (kpiError) {
+        console.error('Error loading KPIs:', kpiError);
+        setKpis({
+          total_bookings: 0,
+          active_courts: 0,
+          total_earnings: 0,
+          pending_bookings: 0
+        });
+      }
+      
+      // Load booking trends
+      console.log('Loading booking trends...');
+      try {
+        const trendsData = await dashboardAPI.getBookingTrends(selectedPeriod);
+        console.log('Trends data:', trendsData);
+        setBookingTrends(trendsData || []);
+      } catch (trendsError) {
+        console.error('Error loading booking trends:', trendsError);
+        setBookingTrends([]);
+      }
+      
+      // Load peak hours
+      console.log('Loading peak hours...');
+      try {
+        const peakHoursData = await dashboardAPI.getPeakHours();
+        console.log('Peak hours data:', peakHoursData);
+        setPeakHours(peakHoursData || []);
+      } catch (peakHoursError) {
+        console.error('Error loading peak hours:', peakHoursError);
+        setPeakHours([]);
+      }
+      
+      // Load courts
+      console.log('Loading courts...');
+      setCourtsLoading(true);
+      try {
+        const courtsData = await courtsAPI.getAll();
+        console.log('Courts data:', courtsData);
+        
+        // Handle paginated response
+        let courtsArray = [];
+        if (courtsData && typeof courtsData === 'object') {
+          if (Array.isArray(courtsData)) {
+            courtsArray = courtsData;
+          } else if (courtsData.results && Array.isArray(courtsData.results)) {
+            courtsArray = courtsData.results;
+          }
+        }
+        
+        setCourts(courtsArray);
+        setHasFacilities(courtsArray.length > 0);
+      } catch (courtsError) {
+        console.error('Error loading courts:', courtsError);
+        setCourts([]);
+        setHasFacilities(false);
+      } finally {
+        setCourtsLoading(false);
+      }
+      
+      // Load bookings
+      console.log('Loading bookings...');
+      try {
+        const bookingsData = await bookingsAPI.getAll();
+        console.log('Bookings data:', bookingsData);
+        if (Array.isArray(bookingsData)) {
+          setBookings(bookingsData);
+        } else if (bookingsData && Array.isArray(bookingsData.results)) {
+          setBookings(bookingsData.results);
+        } else {
+          setBookings([]);
+        }
+      } catch (bookingsError) {
+        console.error('Error loading bookings:', bookingsError);
+        setBookings([]);
+      }
+      
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      setError('Failed to load dashboard data. Please try again.');
+      toast.error('Failed to load dashboard data. Please try again.');
+      
+      setKpis({
+        total_bookings: 0,
+        active_courts: 0,
+        total_earnings: 0,
+        pending_bookings: 0
+      });
+      setBookingTrends([]);
+      setPeakHours([]);
+      setCourts([]);
+      setBookings([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load dashboard data on component mount and when selectedPeriod changes
+  useEffect(() => {
+    loadDashboardData();
+  }, [selectedPeriod]);
 
   // Handler functions
   const handleCourtEdit = (court: any) => {
@@ -147,6 +195,15 @@ export default function Dashboard() {
     toast.info(`Deleting court ID: ${courtId}`);
   };
 
+  const handleAddCourt = () => {
+    console.log('Add Court button clicked, opening modal...');
+    setIsCourtModalOpen(true);
+  };
+
+  const handleCourtModalClose = () => {
+    setIsCourtModalOpen(false);
+  };
+
   const handleBookingView = (booking: any) => {
     toast.info(`Viewing booking: ${booking.id}`);
   };
@@ -157,6 +214,142 @@ export default function Dashboard() {
 
   const handleBookingStatusChange = (bookingId: number, status: string) => {
     toast.success(`Booking ${bookingId} status changed to ${status}`);
+  };
+
+  const handleCourtCreated = () => {
+    loadDashboardData();
+  };
+
+  // Load sports and amenities data
+  useEffect(() => {
+    const loadSportsAndAmenities = async () => {
+      setSportsAmenitiesLoading(true);
+      setSportsAmenitiesError(null);
+      try {
+        console.log('Loading sports and amenities...');
+        const [sportsData, amenitiesData] = await Promise.all([
+          sportsAPI.getAll(),
+          amenitiesAPI.getAll()
+        ]);
+        console.log('Sports data:', sportsData);
+        console.log('Amenities data:', amenitiesData);
+        
+        setSports(Array.isArray(sportsData) ? sportsData : []);
+        setAmenities(Array.isArray(amenitiesData) ? amenitiesData : []);
+      } catch (error) {
+        console.error('Error loading sports and amenities:', error);
+        setSports([]);
+        setAmenities([]);
+        setSportsAmenitiesError('Failed to load sports and amenities. Please try again.');
+      } finally {
+        setSportsAmenitiesLoading(false);
+      }
+    };
+
+    if (activeTab === 'facilities') {
+      loadSportsAndAmenities();
+    }
+  }, [activeTab]);
+
+  // Facility form handlers
+  const handleFacilityInputChange = (field: string, value: string | number[] | File[]) => {
+    setFacilityForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setFacilityForm(prev => ({
+      ...prev,
+      photos: [...prev.photos, ...files]
+    }));
+  };
+
+  const removePhoto = (index: number) => {
+    setFacilityForm(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleFacilitySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!facilityForm.name || !facilityForm.address || !facilityForm.phone || !facilityForm.email) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setFacilityLoading(true);
+    try {
+      const formData = new FormData();
+      
+      // Add basic facility data
+      formData.append('name', facilityForm.name);
+      formData.append('description', facilityForm.description);
+      formData.append('address', facilityForm.address);
+      formData.append('city', facilityForm.city);
+      formData.append('state', facilityForm.state);
+      formData.append('pincode', facilityForm.pincode);
+      formData.append('phone', facilityForm.phone);
+      formData.append('email', facilityForm.email);
+      formData.append('website', facilityForm.website);
+      formData.append('capacity', facilityForm.capacity);
+      formData.append('parking_spaces', facilityForm.parking_spaces);
+      formData.append('year_established', facilityForm.year_established);
+      formData.append('opening_time', facilityForm.opening_time);
+      formData.append('closing_time', facilityForm.closing_time);
+      
+      // Add sports
+      facilityForm.selectedSports.forEach(sportId => {
+        formData.append('sports', sportId.toString());
+      });
+      
+      // Add amenities
+      facilityForm.selectedAmenities.forEach(amenityId => {
+        formData.append('amenities', amenityId.toString());
+      });
+      
+      // Add photos
+      facilityForm.photos.forEach(photo => {
+        formData.append('photos', photo);
+      });
+
+      await facilitiesAPI.create(formData);
+      toast.success('Facility created successfully!');
+      
+      // Reset form
+      setFacilityForm({
+        name: '',
+        description: '',
+        address: '',
+        city: '',
+        state: '',
+        pincode: '',
+        phone: '',
+        email: '',
+        website: '',
+        capacity: '',
+        parking_spaces: '',
+        year_established: '',
+        opening_time: '',
+        closing_time: '',
+        selectedSports: [],
+        selectedAmenities: [],
+        photos: []
+      });
+      
+      // Reload dashboard data
+      loadDashboardData();
+      
+    } catch (error) {
+      console.error('Error creating facility:', error);
+      toast.error('Failed to create facility. Please try again.');
+    } finally {
+      setFacilityLoading(false);
+    }
   };
 
   return (
@@ -183,7 +376,7 @@ export default function Dashboard() {
                   <SelectItem value="year">This Year</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="hero">
+              <Button variant="hero" onClick={handleAddCourt}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Court
               </Button>
@@ -210,8 +403,8 @@ export default function Dashboard() {
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">156</div>
-                  <p className="text-xs text-muted-foreground">+12% from last month</p>
+                  <div className="text-2xl font-bold">{kpis.total_bookings}</div>
+                  <p className="text-xs text-muted-foreground">Total bookings</p>
                 </CardContent>
               </Card>
 
@@ -221,8 +414,8 @@ export default function Dashboard() {
                   <Building className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">8</div>
-                  <p className="text-xs text-muted-foreground">1 in maintenance</p>
+                  <div className="text-2xl font-bold">{kpis.active_courts}</div>
+                  <p className="text-xs text-muted-foreground">Active courts</p>
                 </CardContent>
               </Card>
 
@@ -232,8 +425,8 @@ export default function Dashboard() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">₹45,250</div>
-                  <p className="text-xs text-muted-foreground">+8% from last month</p>
+                  <div className="text-2xl font-bold">₹{kpis.total_earnings.toLocaleString()}</div>
+                  <p className="text-xs text-muted-foreground">Total earnings</p>
                 </CardContent>
               </Card>
 
@@ -243,127 +436,364 @@ export default function Dashboard() {
                   <Clock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">12</div>
-                  <p className="text-xs text-muted-foreground">Require attention</p>
+                  <div className="text-2xl font-bold">{kpis.pending_bookings}</div>
+                  <p className="text-xs text-muted-foreground">Pending bookings</p>
                 </CardContent>
               </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <BookingTrendsChart data={mockBookingTrends} period={selectedPeriod} />
-              <PeakHoursChart data={mockPeakHours} />
-            </div>
+            {loading ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <BookingTrendsChart data={bookingTrends} period={selectedPeriod} />
+                <PeakHoursChart data={peakHours} />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="facilities" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Facility Management</h2>
-              <Button variant="hero">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Facility
-              </Button>
             </div>
             
-            <Card>
-              <CardContent className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Facility Details</h3>
-                    <div className="space-y-3">
+            <form onSubmit={handleFacilitySubmit}>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
                       <div>
-                        <Label className="text-sm font-medium">Facility Name</Label>
-                        <Input placeholder="Enter facility name" />
+                        <Label htmlFor="name">Facility Name *</Label>
+                        <Input
+                          id="name"
+                          value={facilityForm.name}
+                          onChange={(e) => handleFacilityInputChange('name', e.target.value)}
+                          placeholder="Enter facility name"
+                          required
+                        />
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Location</Label>
-                        <Input placeholder="Enter address" />
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium">Description</Label>
-                        <textarea 
-                          className="w-full p-3 border rounded-md resize-none"
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                          id="description"
+                          value={facilityForm.description}
+                          onChange={(e) => handleFacilityInputChange('description', e.target.value)}
+                          placeholder="Describe your facility"
                           rows={3}
-                          placeholder="Describe your facility..."
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="address">Address *</Label>
+                        <Input
+                          id="address"
+                          value={facilityForm.address}
+                          onChange={(e) => handleFacilityInputChange('address', e.target.value)}
+                          placeholder="Enter full address"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="city">City</Label>
+                          <Input
+                            id="city"
+                            value={facilityForm.city}
+                            onChange={(e) => handleFacilityInputChange('city', e.target.value)}
+                            placeholder="City"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="state">State</Label>
+                          <Input
+                            id="state"
+                            value={facilityForm.state}
+                            onChange={(e) => handleFacilityInputChange('state', e.target.value)}
+                            placeholder="State"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="pincode">Pincode</Label>
+                        <Input
+                          id="pincode"
+                          value={facilityForm.pincode}
+                          onChange={(e) => handleFacilityInputChange('pincode', e.target.value)}
+                          placeholder="Pincode"
                         />
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Sports & Amenities</h3>
-                    <div className="space-y-3">
+                    
+                    <div className="space-y-4">
                       <div>
-                        <Label className="text-sm font-medium">Sports Supported</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select sports" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="basketball">Basketball</SelectItem>
-                            <SelectItem value="tennis">Tennis</SelectItem>
-                            <SelectItem value="badminton">Badminton</SelectItem>
-                            <SelectItem value="football">Football</SelectItem>
-                            <SelectItem value="cricket">Cricket</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="phone">Phone Number *</Label>
+                        <Input
+                          id="phone"
+                          value={facilityForm.phone}
+                          onChange={(e) => handleFacilityInputChange('phone', e.target.value)}
+                          placeholder="Enter phone number"
+                          required
+                        />
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Amenities</Label>
-                        <div className="space-y-2">
-                          {['Parking', 'Changing Rooms', 'Equipment Rental', 'Cafeteria', 'WiFi'].map((amenity) => (
-                            <label key={amenity} className="flex items-center space-x-2">
-                              <input type="checkbox" className="rounded" />
-                              <span className="text-sm">{amenity}</span>
-                            </label>
-                          ))}
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={facilityForm.email}
+                          onChange={(e) => handleFacilityInputChange('email', e.target.value)}
+                          placeholder="Enter email address"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="website">Website</Label>
+                        <Input
+                          id="website"
+                          value={facilityForm.website}
+                          onChange={(e) => handleFacilityInputChange('website', e.target.value)}
+                          placeholder="Website URL"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="capacity">Capacity</Label>
+                          <Input
+                            id="capacity"
+                            type="number"
+                            value={facilityForm.capacity}
+                            onChange={(e) => handleFacilityInputChange('capacity', e.target.value)}
+                            placeholder="Max capacity"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="parking_spaces">Parking Spaces</Label>
+                          <Input
+                            id="parking_spaces"
+                            type="number"
+                            value={facilityForm.parking_spaces}
+                            onChange={(e) => handleFacilityInputChange('parking_spaces', e.target.value)}
+                            placeholder="Number of spaces"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="year_established">Year Established</Label>
+                        <Input
+                          id="year_established"
+                          type="number"
+                          value={facilityForm.year_established}
+                          onChange={(e) => handleFacilityInputChange('year_established', e.target.value)}
+                          placeholder="Year"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="opening_time">Opening Time</Label>
+                          <Input
+                            id="opening_time"
+                            type="time"
+                            value={facilityForm.opening_time}
+                            onChange={(e) => handleFacilityInputChange('opening_time', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="closing_time">Closing Time</Label>
+                          <Input
+                            id="closing_time"
+                            type="time"
+                            value={facilityForm.closing_time}
+                            onChange={(e) => handleFacilityInputChange('closing_time', e.target.value)}
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                
-                <div className="mt-6 pt-6 border-t">
-                  <h3 className="text-lg font-medium mb-4">Facility Photos</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center">
-                      <Plus className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm text-muted-foreground">Upload Photo</p>
+
+                  <div className="mt-6 space-y-4">
+                    <div>
+                      <Label>Sports Available</Label>
+                      {sportsAmenitiesLoading ? (
+                        <div className="flex items-center space-x-2 mt-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span className="text-sm text-muted-foreground">Loading sports...</span>
+                        </div>
+                      ) : sportsAmenitiesError ? (
+                        <p className="text-sm text-red-600 mt-2">{sportsAmenitiesError}</p>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mt-2">
+                          {sports.map((sport) => (
+                            <label key={sport.id} className="flex items-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={facilityForm.selectedSports.includes(sport.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    handleFacilityInputChange('selectedSports', [...facilityForm.selectedSports, sport.id]);
+                                  } else {
+                                    handleFacilityInputChange('selectedSports', facilityForm.selectedSports.filter(id => id !== sport.id));
+                                  }
+                                }}
+                                className="rounded"
+                              />
+                              <span className="text-sm">{sport.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Amenities Available</Label>
+                      {sportsAmenitiesLoading ? (
+                        <div className="flex items-center space-x-2 mt-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span className="text-sm text-muted-foreground">Loading amenities...</span>
+                        </div>
+                      ) : sportsAmenitiesError ? (
+                        <p className="text-sm text-red-600 mt-2">{sportsAmenitiesError}</p>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mt-2">
+                          {amenities.map((amenity) => (
+                            <label key={amenity.id} className="flex items-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={facilityForm.selectedAmenities.includes(amenity.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    handleFacilityInputChange('selectedAmenities', [...facilityForm.selectedAmenities, amenity.id]);
+                                  } else {
+                                    handleFacilityInputChange('selectedAmenities', facilityForm.selectedAmenities.filter(id => id !== amenity.id));
+                                  }
+                                }}
+                                className="rounded"
+                              />
+                              <span className="text-sm">{amenity.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Facility Photos</Label>
+                      <Input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                        className="mt-2"
+                      />
+                      {facilityForm.photos.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {facilityForm.photos.map((photo, index) => (
+                            <div key={index} className="relative">
+                              <img
+                                src={URL.createObjectURL(photo)}
+                                alt={`Photo ${index + 1}`}
+                                className="w-20 h-20 object-cover rounded"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removePhoto(index)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+
+                  <div className="flex justify-end mt-6">
+                    <Button type="submit" disabled={facilityLoading}>
+                      {facilityLoading ? 'Creating...' : 'Create Facility'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </form>
           </TabsContent>
 
           <TabsContent value="courts" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Court Management</h2>
-              <Button variant="hero">
+              <Button variant="hero" onClick={handleAddCourt}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Court
               </Button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {mockCourts.map((court) => (
-                <CourtCard
-                  key={court.id}
-                  court={court}
-                  onEdit={handleCourtEdit}
-                  onView={handleCourtView}
-                  onDelete={handleCourtDelete}
-                />
-              ))}
+              {courtsLoading ? (
+                <div className="col-span-full flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : courts.length > 0 ? (
+                courts.map((court) => (
+                  <CourtCard
+                    key={court.id}
+                    court={court}
+                    onEdit={handleCourtEdit}
+                    onView={handleCourtView}
+                    onDelete={handleCourtDelete}
+                  />
+                ))
+              ) : (
+                <div className="col-span-full text-center py-8">
+                  <div className="max-w-md mx-auto">
+                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Building className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">No Courts Found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {hasFacilities 
+                        ? "You haven't added any courts yet. Create your first court to start accepting bookings."
+                        : "You need to create a facility first before adding courts. Please contact support to set up your facility."
+                      }
+                    </p>
+                    {hasFacilities && (
+                      <Button variant="hero" onClick={handleAddCourt}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Your First Court
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="bookings" className="space-y-6">
-            <BookingTable
-              bookings={mockBookings}
-              onView={handleBookingView}
-              onEdit={handleBookingEdit}
-              onStatusChange={handleBookingStatusChange}
-            />
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <p className="text-red-600 mb-4">{error}</p>
+                  <Button onClick={() => window.location.reload()}>
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <BookingTable
+                bookings={bookings}
+                onView={handleBookingView}
+                onEdit={handleBookingEdit}
+                onStatusChange={handleBookingStatusChange}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="profile" className="space-y-6">
@@ -421,12 +851,17 @@ export default function Dashboard() {
                     <span className="text-sm">Phone Verified</span>
                     <Badge variant={user?.is_phone_verified ? "default" : "secondary"}>
                       {user?.is_phone_verified ? "Verified" : "Pending"}
+                      
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Member Since</span>
                     <span className="text-sm text-muted-foreground">
-                      N/A
+                      {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      }) : 'N/A'}
                     </span>
                   </div>
                 </CardContent>
@@ -435,6 +870,13 @@ export default function Dashboard() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Court Registration Modal */}
+      <CourtRegistrationModal
+        isOpen={isCourtModalOpen}
+        onClose={handleCourtModalClose}
+        onSuccess={handleCourtCreated}
+      />
     </div>
   );
 } 

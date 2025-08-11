@@ -62,18 +62,9 @@ export default function Login() {
       
       if (success) {
         toast.success("Login successful!");
-        
-        // Get user data from localStorage to check user type
-        const userData = localStorage.getItem('user');
-        if (userData) {
-          const user = JSON.parse(userData);
-          const redirectPath = getRedirectPath(user.user_type);
-          navigate(redirectPath);
-        } else {
-          navigate('/');
-        }
+        // Navigation will be handled by PublicRoute component
       } else {
-        toast.error("Login failed. Please check your credentials.");
+        toast.error("Login failed. Please check your email and password.");
       }
     } catch (error) {
       console.error('Login error:', error);

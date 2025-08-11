@@ -12,7 +12,32 @@ interface PeakHoursChartProps {
 }
 
 export function PeakHoursChart({ data }: PeakHoursChartProps) {
-  const maxPercentage = Math.max(...data.map(d => d.percentage));
+  console.log('PeakHoursChart received data:', data);
+  
+  // Ensure data is always an array
+  const safeData = Array.isArray(data) ? data : [];
+  
+  // Handle empty data
+  if (safeData.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Clock className="h-5 w-5 mr-2" />
+            Peak Booking Hours
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No booking data available</p>
+            <p className="text-sm">Bookings will appear here once you have activity</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const maxPercentage = Math.max(...safeData.map(d => d.percentage));
   
   return (
     <Card>
@@ -24,7 +49,7 @@ export function PeakHoursChart({ data }: PeakHoursChartProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {data.map((hour, index) => (
+          {safeData.map((hour, index) => (
             <div key={index} className="flex items-center space-x-3">
               <span className="text-sm font-medium w-16">{hour.hour}</span>
               <div className="flex-1 bg-muted rounded-full h-2 relative">
@@ -52,9 +77,23 @@ export function PeakHoursChart({ data }: PeakHoursChartProps) {
         <div className="mt-6 p-4 bg-muted/50 rounded-lg">
           <h4 className="text-sm font-medium mb-2">Insights</h4>
           <div className="space-y-1 text-xs text-muted-foreground">
-            <p>• Peak hours: {data.slice(0, 3).map(h => h.hour).join(', ')}</p>
-            <p>• Total bookings: {data.reduce((sum, h) => sum + h.bookings, 0)}</p>
-            <p>• Busiest time: {data.reduce((max, h) => h.bookings > max.bookings ? h : max).hour}</p>
+            <p>• Peak hours: {data.length > 0 ? data.slice(0, 3).map(h => h.hour).join(', ') : 'No data'}</p>
+            <p>• Total bookings: {(() => {
+              try {
+                return data.length > 0 ? data.reduce((sum, h) => sum + h.bookings, 0) : 0;
+              } catch (error) {
+                console.error('Error calculating total bookings:', error);
+                return 0;
+              }
+            })()}</p>
+            <p>• Busiest time: {(() => {
+              try {
+                return data.length > 0 ? data.reduce((max, h) => h.bookings > max.bookings ? h : max).hour : 'No data';
+              } catch (error) {
+                console.error('Error calculating busiest time:', error);
+                return 'No data';
+              }
+            })()}</p>
           </div>
         </div>
       </CardContent>

@@ -13,6 +13,26 @@ interface BookingTrendsChartProps {
 }
 
 export function BookingTrendsChart({ data, period }: BookingTrendsChartProps) {
+  // Handle empty or undefined data
+  if (!data || data.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <TrendingUp className="h-5 w-5 mr-2" />
+            Booking Trends ({period})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No booking trends available</p>
+            <p className="text-sm">Trends will appear here once you have bookings</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const maxBookings = Math.max(...data.map(d => d.bookings));
   
   return (
@@ -49,13 +69,13 @@ export function BookingTrendsChart({ data, period }: BookingTrendsChartProps) {
           <div>
             <p className="text-sm text-muted-foreground">Total Bookings</p>
             <p className="text-lg font-bold text-primary">
-              {data.reduce((sum, day) => sum + day.bookings, 0)}
+              {data.length > 0 ? data.reduce((sum, day) => sum + day.bookings, 0) : 0}
             </p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Total Earnings</p>
             <p className="text-lg font-bold text-green-600">
-              ₹{data.reduce((sum, day) => sum + day.earnings, 0).toLocaleString()}
+              ₹{data.length > 0 ? data.reduce((sum, day) => sum + day.earnings, 0).toLocaleString() : '0'}
             </p>
           </div>
         </div>

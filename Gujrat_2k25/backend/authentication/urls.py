@@ -19,4 +19,9 @@ urlpatterns = [
     # Validation endpoints
     path('check-email/', views.check_email_exists, name='check-email'),
     path('check-phone/', views.check_phone_exists, name='check-phone'),
+    
+    # Email verification
+    path('send-otp/', views.SendOTPView.as_view(), name='send-otp'),
+    path('verify-email/', views.VerifyEmailView.as_view(), name='verify-email'),
+    path('resend-otp/', views.ResendOTPView.as_view(), name='resend-otp'),
 ] 

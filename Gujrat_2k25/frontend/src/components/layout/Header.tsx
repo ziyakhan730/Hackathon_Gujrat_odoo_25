@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Moon, Sun, Menu, User, Search, LogOut } from "lucide-react";
+import { MapPin, Moon, Sun, Menu, User, Search, LogOut, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLocation } from "@/contexts/LocationContext";
 import { toast } from "sonner";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(true); // Default to dark mode for Gen-Z aesthetic
   const { user, isAuthenticated, logout } = useAuth();
+  const { location, isLoading, requestLocation } = useLocation();
 
   const toggleTheme = () => {
     setIsDark(!isDark);
@@ -51,18 +53,7 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            {isAuthenticated && (
-              <>
-                {user?.user_type === 'owner' && (
-                  <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
-                    Dashboard
-                  </Link>
-                )}
-                <Link to="/profile" className="text-foreground hover:text-primary transition-colors">
-                  Profile
-                </Link>
-              </>
-            )}
+            {/* Navigation links removed - Dashboard and Profile are now accessed through other means */}
           </nav>
 
           {/* Actions */}
@@ -73,9 +64,20 @@ export function Header() {
             </Button>
 
             {/* Location */}
-            <Button variant="glass" size="sm" className="hidden sm:flex">
-              <MapPin className="h-4 w-4" />
-              Mumbai
+            <Button 
+              variant="glass" 
+              size="sm" 
+              className="hidden sm:flex"
+              onClick={requestLocation}
+              disabled={isLoading}
+              title={location ? `Current location: ${location.city}` : 'Set your location'}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MapPin className="h-4 w-4" />
+              )}
+              {location ? location.city : 'Set Location'}
             </Button>
 
             {/* Theme Toggle */}
@@ -150,14 +152,7 @@ export function Header() {
             <nav className="flex flex-col space-y-4">
               {isAuthenticated ? (
                 <>
-                  {user?.user_type === 'owner' && (
-                    <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors py-2">
-                      Dashboard
-                    </Link>
-                  )}
-                  <Link to="/profile" className="text-foreground hover:text-primary transition-colors py-2">
-                    My Profile
-                  </Link>
+                  {/* Navigation links removed - Dashboard and Profile are now accessed through other means */}
                   <div className="flex items-center space-x-2 py-2">
                     <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
                       <span className="text-primary-foreground font-bold text-sm">

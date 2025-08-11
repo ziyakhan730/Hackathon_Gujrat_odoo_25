@@ -43,11 +43,13 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'phonenumber_field',
     
     # Local apps
     'authentication',
+    'courts',
 ]
 
 MIDDLEWARE = [
@@ -129,6 +131,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (Uploaded files)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
@@ -175,6 +181,9 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
 
     'JTI_CLAIM': 'jti',
+    
+    # Blacklist settings
+    'BLACKLIST_TOKEN_CHECKS': ['access', 'refresh'],
 }
 
 # CORS Settings
@@ -211,3 +220,15 @@ CORS_ALLOW_HEADERS = [
 # Phone Number Field Settings
 PHONENUMBER_DEFAULT_REGION = 'IN'
 PHONENUMBER_DEFAULT_FORMAT = 'NATIONAL'
+
+# Email Settings - Gmail SMTP (Temporary until Brevo is activated)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'ziyakhanitm@gmail.com'
+EMAIL_HOST_PASSWORD = 'vgew epwa txso dedw'  # Generate this from Google Account settings
+DEFAULT_FROM_EMAIL = 'QuickCourt <ziyakhanitm@gmail.com>'
+
+# Frontend URL for password reset
+FRONTEND_URL = 'http://localhost:8080'

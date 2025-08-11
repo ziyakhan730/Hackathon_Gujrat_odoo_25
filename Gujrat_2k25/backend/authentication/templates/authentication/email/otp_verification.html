@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - QuickCourt</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            display: inline-block;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .otp-container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        .otp-code {
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 5px;
+            margin: 10px 0;
+        }
+        .expires {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 10px;
+        }
+        .content {
+            margin: 30px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 14px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">QuickCourt</div>
+        </div>
+        
+        <div class="content">
+            <h2>Hello {{ user.first_name }}!</h2>
+            <p>Thank you for registering with QuickCourt. To complete your registration, please verify your email address using the verification code below:</p>
+            
+            <div class="otp-container">
+                <div class="otp-code">{{ otp }}</div>
+                <div class="expires">Expires in {{ expires_in }}</div>
+            </div>
+            
+            <p>Enter this code in the verification form to complete your registration.</p>
+            
+            <div class="warning">
+                <strong>Security Notice:</strong> This code is valid for {{ expires_in }} only. Never share this code with anyone.
+            </div>
+            
+            <p>If you didn't create an account with QuickCourt, please ignore this email.</p>
+        </div>
+        
+                <div class="footer">
+          <p>Best regards,<br>The QuickCourt Team</p>
+          <p>© 2024 QuickCourt. All rights reserved.</p>
+          <p style="font-size: 12px; color: #999; margin-top: 10px;">
+            Sent from ziyakhanitm@gmail.com
+          </p>
+        </div>
+    </div>
+</body>
+</html> 

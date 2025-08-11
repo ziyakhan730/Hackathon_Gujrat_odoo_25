@@ -8,6 +8,7 @@ class User(AbstractUser):
     USER_TYPE_CHOICES = [
         ('player', 'Player'),
         ('owner', 'Court Owner'),
+        ('admin', 'Admin'),
     ]
     
     # Basic fields
@@ -121,3 +122,29 @@ class CountryCode(models.Model):
     def get_active_countries(cls):
         """Get all active country codes"""
         return cls.objects.filter(is_active=True)
+
+class EmailOTP(models.Model):
+    """Model to store email OTP for verification"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_otps')
+    email = models.EmailField()
+    otp = models.CharField(max_length=6)
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    class Meta:
+        db_table = 'email_otps'
+        verbose_name = 'Email OTP'
+        verbose_name_plural = 'Email OTPs'
+    
+    def __str__(self):
+        return f"OTP for {self.email} - {self.otp}"
+    
+    def is_expired(self):
+        """Check if OTP has expired"""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+    
+    def is_valid(self):
+        """Check if OTP is valid (not used and not expired)"""
+        return not self.is_used and not self.is_expired()

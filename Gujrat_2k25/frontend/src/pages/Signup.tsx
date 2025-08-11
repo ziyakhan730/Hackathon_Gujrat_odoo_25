@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { EmailVerificationModal } from "@/components/auth/EmailVerificationModal";
 
 interface CountryCode {
   code: string;
@@ -40,6 +41,8 @@ export default function Signup() {
   const [countryCodes, setCountryCodes] = useState<CountryCode[]>(defaultCountryCodes);
   const [selectedCountry, setSelectedCountry] = useState<CountryCode | null>(defaultCountryCodes[0]);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
   
   const [formData, setFormData] = useState({
     firstName: "",
@@ -207,48 +210,23 @@ export default function Signup() {
     setIsLoading(true);
     
     try {
-      const response = await fetch('http://localhost:8000/api/auth/register/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          email: formData.email,
-          phone_number: formData.phone, // Send only the phone number digits (backend will combine with country code)
-          country_code: selectedCountry?.code || '+91',
-          user_type: formData.userType,
-          password: formData.password,
-          confirm_password: formData.confirmPassword,
-        }),
+      const success = await register({
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone_number: formData.phone, // Send only the phone number digits (backend will combine with country code)
+        country_code: selectedCountry?.code || '+91',
+        user_type: formData.userType,
+        password: formData.password,
+        confirm_password: formData.confirmPassword,
       });
       
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        // Store tokens in localStorage
-        localStorage.setItem('access_token', data.data.tokens.access);
-        localStorage.setItem('refresh_token', data.data.tokens.refresh);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        
-        toast.success("Account created successfully!");
-        
-        // Redirect based on user type
-        const redirectPath = getRedirectPath(data.data.user.user_type);
-        navigate(redirectPath);
+      if (success) {
+        toast.success("Account created successfully! Please verify your email.");
+        setRegisteredEmail(formData.email);
+        setShowEmailVerification(true);
       } else {
-        // Handle validation errors from backend
-        if (data.errors) {
-          const backendErrors: Record<string, string> = {};
-          Object.keys(data.errors).forEach(key => {
-            backendErrors[key] = data.errors[key][0];
-          });
-          setValidationErrors(backendErrors);
-          toast.error("Please fix the errors in the form");
-        } else {
-          toast.error(data.message || "Registration failed");
-        }
+        toast.error("Registration failed. Please try again.");
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -256,6 +234,44 @@ export default function Signup() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleEmailVerificationSuccess = () => {
+    toast.success("Email verified successfully!");
+    setShowEmailVerification(false);
+    
+    // The EmailVerificationModal already handles moving tokens to permanent storage
+    // and setting the user as authenticated, so we just navigate to the appropriate page
+    
+    // Get the user type to determine redirect
+    const tempUser = localStorage.getItem('temp_user');
+    if (tempUser) {
+      const userData = JSON.parse(tempUser);
+      const redirectPath = getRedirectPath(userData.user_type);
+      navigate(redirectPath);
+    } else {
+      // If no temp user, check if user is now authenticated
+      const user = localStorage.getItem('user');
+      if (user) {
+        const userData = JSON.parse(user);
+        const redirectPath = getRedirectPath(userData.user_type);
+        navigate(redirectPath);
+      } else {
+        navigate('/login');
+      }
+    }
+  };
+
+  const handleEmailVerificationClose = () => {
+    setShowEmailVerification(false);
+    
+    // Clean up temporary tokens if user closes without verifying
+    localStorage.removeItem('temp_access_token');
+    localStorage.removeItem('temp_refresh_token');
+    localStorage.removeItem('temp_user');
+    
+    // Navigate to login page
+    navigate('/login');
   };
 
   return (
@@ -606,6 +622,14 @@ export default function Signup() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Email Verification Modal */}
+      <EmailVerificationModal
+        isOpen={showEmailVerification}
+        onClose={handleEmailVerificationClose}
+        onSuccess={handleEmailVerificationSuccess}
+        email={registeredEmail}
+      />
     </div>
   );
 } 

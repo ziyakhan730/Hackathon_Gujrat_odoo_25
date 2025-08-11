@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to QuickCourt!</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            display: inline-block;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .welcome-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        .welcome-title {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .features {
+            margin: 30px 0;
+        }
+        .feature-item {
+            background-color: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .feature-icon {
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">QuickCourt</div>
+        </div>
+        
+        <div class="welcome-banner">
+            <div class="welcome-title">Welcome to QuickCourt!</div>
+            <p>India's fastest-growing sports community</p>
+        </div>
+        
+        <div class="content">
+            <h2>Hello {{ user.first_name }}!</h2>
+            <p>Welcome to QuickCourt! We're excited to have you join our community of sports enthusiasts.</p>
+            
+            <div class="features">
+                <h3>What you can do with QuickCourt:</h3>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">🏸</span>
+                    <strong>Book Courts Instantly</strong><br>
+                    Find and book sports facilities in your area with real-time availability
+                </div>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">👥</span>
+                    <strong>Join Matches</strong><br>
+                    Connect with players of your skill level for competitive games
+                </div>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">📅</span>
+                    <strong>Smart Scheduling</strong><br>
+                    AI-powered scheduling that finds the perfect time slots for you
+                </div>
+                
+                <div class="feature-item">
+                    <span class="feature-icon">🏆</span>
+                    <strong>Track Progress</strong><br>
+                    Monitor your sports activities and improve your game
+                </div>
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="http://localhost:8080" class="cta-button">Get Started Now</a>
+            </div>
+            
+            <p>Ready to start your sports journey? Explore courts near you and book your first session!</p>
+        </div>
+        
+                <div class="footer">
+          <p>Best regards,<br>The QuickCourt Team</p>
+          <p>© 2024 QuickCourt. All rights reserved.</p>
+          <p style="font-size: 12px; color: #999; margin-top: 10px;">
+            Sent from ziyakhanitm@gmail.com
+          </p>
+        </div>
+    </div>
+</body>
+</html> 

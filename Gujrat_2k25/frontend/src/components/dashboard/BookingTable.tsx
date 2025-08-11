@@ -7,15 +7,23 @@ import { Eye, Edit, CheckCircle, Clock, XCircle, AlertCircle } from "lucide-reac
 
 interface Booking {
   id: number;
-  userName: string;
-  userEmail: string;
-  courtName: string;
-  date: string;
-  time: string;
-  status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
-  amount: number;
-  paymentStatus: 'paid' | 'pending' | 'failed';
-  createdAt: string;
+  booking_id: string;
+  user: string; // Full name from backend
+  user_email: string;
+  court: string; // Court name from backend
+  facility: string; // Facility name from backend
+  booking_date: string;
+  start_time: string;
+  end_time: string;
+  duration_hours: number;
+  price_per_hour: number;
+  total_amount: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
+  special_requests?: string;
+  cancellation_reason?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface BookingTableProps {
@@ -26,6 +34,9 @@ interface BookingTableProps {
 }
 
 export function BookingTable({ bookings, onView, onEdit, onStatusChange }: BookingTableProps) {
+  // Ensure bookings is always an array
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -34,6 +45,7 @@ export function BookingTable({ bookings, onView, onEdit, onStatusChange }: Booki
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'cancelled':
+      case 'no_show':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -48,6 +60,7 @@ export function BookingTable({ bookings, onView, onEdit, onStatusChange }: Booki
       case 'pending':
         return <Clock className="h-4 w-4" />;
       case 'cancelled':
+      case 'no_show':
         return <XCircle className="h-4 w-4" />;
       default:
         return <AlertCircle className="h-4 w-4" />;
@@ -61,9 +74,20 @@ export function BookingTable({ bookings, onView, onEdit, onStatusChange }: Booki
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'failed':
+      case 'refunded':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatTime = (startTime: string, endTime: string) => {
+    try {
+      const start = new Date(`2000-01-01T${startTime}`);
+      const end = new Date(`2000-01-01T${endTime}`);
+      return `${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}-${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    } catch (error) {
+      return `${startTime}-${endTime}`;
     }
   };
 
@@ -104,26 +128,28 @@ export function BookingTable({ bookings, onView, onEdit, onStatusChange }: Booki
               </tr>
             </thead>
             <tbody>
-              {bookings.map((booking) => (
+              {safeBookings.map((booking) => (
                 <tr key={booking.id} className="border-b hover:bg-muted/50 transition-colors">
                   <td className="p-4">
                     <div>
-                      <p className="font-medium">{booking.userName}</p>
-                      <p className="text-sm text-muted-foreground">{booking.userEmail}</p>
-                      <p className="text-xs text-muted-foreground">ID: {booking.id}</p>
+                      <p className="font-medium">{booking.user}</p>
+                      <p className="text-sm text-muted-foreground">{booking.user_email}</p>
+                      <p className="text-xs text-muted-foreground">ID: {booking.booking_id}</p>
                     </div>
                   </td>
                   <td className="p-4">
-                    <p className="font-medium">{booking.courtName}</p>
+                    <p className="font-medium">{booking.court}</p>
+                    <p className="text-sm text-muted-foreground">{booking.facility}</p>
                   </td>
                   <td className="p-4">
                     <div>
-                      <p className="font-medium">{new Date(booking.date).toLocaleDateString()}</p>
-                      <p className="text-sm text-muted-foreground">{booking.time}</p>
+                      <p className="font-medium">{new Date(booking.booking_date).toLocaleDateString()}</p>
+                      <p className="text-sm text-muted-foreground">{formatTime(booking.start_time, booking.end_time)}</p>
                     </div>
                   </td>
                   <td className="p-4">
-                    <p className="font-medium">₹{booking.amount}</p>
+                    <p className="font-medium">₹{booking.total_amount}</p>
+                    <p className="text-sm text-muted-foreground">₹{booking.price_per_hour}/hr</p>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center space-x-2">
@@ -148,8 +174,8 @@ export function BookingTable({ bookings, onView, onEdit, onStatusChange }: Booki
                     </div>
                   </td>
                   <td className="p-4">
-                    <Badge className={getPaymentStatusColor(booking.paymentStatus)}>
-                      <span className="capitalize">{booking.paymentStatus}</span>
+                    <Badge className={getPaymentStatusColor(booking.payment_status)}>
+                      <span className="capitalize">{booking.payment_status}</span>
                     </Badge>
                   </td>
                   <td className="p-4">
@@ -176,7 +202,7 @@ export function BookingTable({ bookings, onView, onEdit, onStatusChange }: Booki
           </table>
         </div>
         
-        {bookings.length === 0 && (
+        {safeBookings.length === 0 && (
           <div className="p-8 text-center text-muted-foreground">
             <p>No bookings found</p>
           </div>

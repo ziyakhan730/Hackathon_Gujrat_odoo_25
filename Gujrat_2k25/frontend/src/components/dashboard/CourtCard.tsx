@@ -6,13 +6,28 @@ import { Star, Edit, Eye, MoreVertical, CheckCircle, AlertCircle, Clock } from "
 interface Court {
   id: number;
   name: string;
-  sport: string;
-  status: 'active' | 'maintenance' | 'inactive';
-  price: number;
-  bookings: number;
-  rating: number;
-  operatingHours: string;
-  amenities: string[];
+  facility: string;
+  sport: {
+    id: number;
+    name: string;
+    icon: string;
+    description: string;
+  };
+  description: string;
+  price_per_hour: number;
+  currency: string;
+  court_number: string;
+  surface_type: string;
+  court_size: string;
+  status: string;
+  is_available: boolean;
+  opening_time: string;
+  closing_time: string;
+  created_at: string;
+  updated_at: string;
+  total_bookings: number;
+  average_rating: number;
+  total_earnings: number;
 }
 
 interface CourtCardProps {
@@ -55,7 +70,8 @@ export function CourtCard({ court, onEdit, onView, onDelete }: CourtCardProps) {
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg">{court.name}</CardTitle>
-            <p className="text-sm text-muted-foreground">{court.sport}</p>
+            <p className="text-sm text-muted-foreground">{court.sport.name}</p>
+            <p className="text-xs text-muted-foreground">{court.facility}</p>
           </div>
           <Badge className={getStatusColor(court.status)}>
             {getStatusIcon(court.status)}
@@ -67,39 +83,33 @@ export function CourtCard({ court, onEdit, onView, onDelete }: CourtCardProps) {
         <div className="space-y-3">
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Price per hour:</span>
-            <span className="font-medium">₹{court.price}</span>
+            <span className="font-medium">{court.currency} {court.price_per_hour}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Total bookings:</span>
-            <span className="font-medium">{court.bookings}</span>
+            <span className="font-medium">{court.total_bookings}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Rating:</span>
             <div className="flex items-center">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              <span className="ml-1 font-medium">{court.rating}</span>
+              <span className="ml-1 font-medium">{court.average_rating}</span>
             </div>
           </div>
           <div className="flex justify-between">
-            <span className="text-sm text-muted-foreground">Operating hours:</span>
-            <span className="text-sm font-medium">{court.operatingHours}</span>
+            <span className="text-sm text-muted-foreground">Total earnings:</span>
+            <span className="text-sm font-medium">{court.currency} {court.total_earnings}</span>
           </div>
-          
-          {court.amenities.length > 0 && (
-            <div>
-              <span className="text-sm text-muted-foreground">Amenities:</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {court.amenities.slice(0, 3).map((amenity, index) => (
-                  <Badge key={index} variant="secondary" className="text-xs">
-                    {amenity}
-                  </Badge>
-                ))}
-                {court.amenities.length > 3 && (
-                  <Badge variant="secondary" className="text-xs">
-                    +{court.amenities.length - 3} more
-                  </Badge>
-                )}
-              </div>
+          {court.opening_time && court.closing_time && (
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Operating hours:</span>
+              <span className="text-sm font-medium">{court.opening_time} - {court.closing_time}</span>
+            </div>
+          )}
+          {court.surface_type && (
+            <div className="flex justify-between">
+              <span className="text-sm text-muted-foreground">Surface:</span>
+              <span className="text-sm font-medium">{court.surface_type}</span>
             </div>
           )}
         </div>

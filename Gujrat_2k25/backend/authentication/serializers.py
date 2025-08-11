@@ -166,4 +166,34 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError("Old password is incorrect")
+        return value
+
+class LogoutSerializer(serializers.Serializer):
+    """Serializer for user logout"""
+    refresh_token = serializers.CharField(required=True)
+    
+    def validate_refresh_token(self, value):
+        """Validate refresh token"""
+        if not value:
+            raise serializers.ValidationError("Refresh token is required")
+        return value
+
+class EmailVerificationSerializer(serializers.Serializer):
+    """Serializer for email verification"""
+    otp = serializers.CharField(max_length=6, min_length=6, required=True)
+    
+    def validate_otp(self, value):
+        """Validate OTP format"""
+        if not value.isdigit():
+            raise serializers.ValidationError("OTP must contain only digits")
+        return value
+
+class ResendOTPSerializer(serializers.Serializer):
+    """Serializer for resending OTP"""
+    email = serializers.EmailField(required=True)
+    
+    def validate_email(self, value):
+        """Validate email exists"""
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("No user found with this email address")
         return value 

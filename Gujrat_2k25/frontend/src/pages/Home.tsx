@@ -1,11 +1,14 @@
 import { motion } from "framer-motion";
-import { Search, MapPin, Calendar, Users, Star, ArrowRight, Zap, Shield, Clock } from "lucide-react";
+import { Search, MapPin, Calendar, Users, Star, ArrowRight, Zap, Shield, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { useLocation } from "@/contexts/LocationContext";
 import heroImage from "@/assets/hero-bg.jpg";
 
 export default function Home() {
+  const { location, isLoading, requestLocation } = useLocation();
+  
   const stats = [
     { icon: Users, label: "Active Players", value: "50K+" },
     { icon: Star, label: "Courts Available", value: "1,200+" },
@@ -115,7 +118,9 @@ export default function Home() {
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
                   <Input 
-                    placeholder="Location" 
+                    placeholder={location ? location.city : "Location"} 
+                    value={location ? location.city : ""}
+                    readOnly={!!location}
                     className="pl-10 glass-surface border-glass-border focus:border-primary"
                   />
                 </div>
@@ -153,6 +158,70 @@ export default function Home() {
           </motion.div>
         </div>
       </section>
+
+      {/* Location Request Section */}
+      {!location && !isLoading && (
+        <section className="py-12 px-4 bg-gradient-to-r from-primary/10 to-accent/10">
+          <div className="max-w-4xl mx-auto text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="space-y-6"
+            >
+              <div className="w-16 h-16 mx-auto bg-gradient-primary rounded-full flex items-center justify-center">
+                <MapPin className="h-8 w-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-display font-semibold text-foreground">
+                Enable Location Services
+              </h3>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Get personalized court recommendations and find facilities near you. 
+                We'll show you the best courts in your area.
+              </p>
+              <Button 
+                variant="hero" 
+                size="lg" 
+                onClick={requestLocation}
+                disabled={isLoading}
+                className="mt-4"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Detecting Location...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="h-5 w-5 mr-2" />
+                    Share My Location
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          </div>
+        </section>
+      )}
+
+      {/* Location Success Section */}
+      {location && (
+        <section className="py-8 px-4 bg-gradient-to-r from-green-500/10 to-emerald-500/10">
+          <div className="max-w-4xl mx-auto text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-center space-x-3"
+            >
+              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-green-600 font-medium">
+                Location detected: {location.city}, {location.state}
+              </span>
+            </motion.div>
+          </div>
+        </section>
+      )}
 
       {/* Features Section */}
       <section className="py-24 px-4">
