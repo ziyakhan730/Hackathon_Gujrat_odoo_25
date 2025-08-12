@@ -417,6 +417,9 @@ export const playerAPI = {
   // Get single venue
   getVenue: (id: number) => apiRequest(`/courts/player/venues/${id}/`),
 
+  // Get single venue for a specific date (to fetch date-specific availability)
+  getVenueForDate: (id: number, date: string) => apiRequest(`/courts/player/venues/${id}/?date=${encodeURIComponent(date)}`),
+
   // Reviews
   getVenueReviews: (venueId: number) => apiRequest(`/courts/player/venues/${venueId}/reviews/`),
   createReview: (bookingId: number, rating: number, review: string) => apiRequest(`/courts/player/bookings/${bookingId}/review/`, {

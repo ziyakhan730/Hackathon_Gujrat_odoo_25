@@ -78,8 +78,11 @@ export default function CourtBooking() {
     agree_to_terms: false
   });
   const [selectedCourt, setSelectedCourt] = useState<any>(null);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<any>(null);
+  const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
   const [processing, setProcessing] = useState(false);
+
+  const displayCourtName = (name: string) =>
+    name.replace(/\bno\s*slots\b/i, '').replace(/\s{2,}/g, ' ').trim();
 
   useEffect(() => {
     if (id) {
@@ -107,20 +110,55 @@ export default function CourtBooking() {
   const handleCourtChange = (courtId: string) => {
     const court = venue?.courts.find(c => c.id === parseInt(courtId));
     setSelectedCourt(court);
-    setBookingForm(prev => ({ ...prev, court_id: parseInt(courtId), time_slot_id: 0 }));
-    setSelectedTimeSlot(null);
+    setBookingForm(prev => ({ ...prev, court_id: parseInt(courtId), time_slot_id: 0, duration_hours: 0 }));
+    setSelectedSlotIds([]);
   };
 
   const handleDateChange = (date: Date | undefined) => {
-    setBookingForm(prev => ({ ...prev, date, time_slot_id: 0 }));
-    setSelectedTimeSlot(null);
+    setBookingForm(prev => ({ ...prev, date, time_slot_id: 0, duration_hours: 0 }));
+    setSelectedSlotIds([]);
+    // Refetch availability for the selected date
+    if (date && id) {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      playerAPI.getVenueForDate(parseInt(id), dateStr).then((res) => {
+        if (res && res.success) {
+          setVenue(res.data);
+          if (bookingForm.court_id) {
+            const updatedCourt = res.data.courts.find((c: any) => c.id === bookingForm.court_id);
+            setSelectedCourt(updatedCourt || null);
+          }
+        }
+      }).catch(() => {});
+    }
   };
 
-  const handleTimeSlotChange = (timeSlotId: string) => {
-    const timeSlot = selectedCourt?.available_slots?.find((ts: any) => ts.id === parseInt(timeSlotId))
-      || selectedCourt?.time_slots?.find((ts: any) => ts.id === parseInt(timeSlotId));
-    setSelectedTimeSlot(timeSlot);
-    setBookingForm(prev => ({ ...prev, time_slot_id: parseInt(timeSlotId) }));
+  const getSlots = () => (selectedCourt?.available_slots || selectedCourt?.time_slots || []) as any[];
+
+  const toggleSlot = (slotId: number) => {
+    if (!selectedCourt) return;
+    const slots = getSlots().filter((s: any) => s.is_available);
+    let next = selectedSlotIds.includes(slotId)
+      ? selectedSlotIds.filter(idv => idv !== slotId)
+      : [...selectedSlotIds, slotId];
+    // Compute contiguity
+    const selected = slots.filter((s: any) => next.includes(s.id))
+      .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
+    if (selected.length > 1) {
+      let contiguous = true;
+      for (let i = 1; i < selected.length; i++) {
+        if (selected[i - 1].end_time !== selected[i].start_time) {
+          contiguous = false;
+          break;
+        }
+      }
+      if (!contiguous) {
+        // Keep only the clicked slot as a reset for clarity
+        next = [slotId];
+        toast.error('Please select contiguous slots');
+      }
+    }
+    setSelectedSlotIds(next);
+    setBookingForm(prev => ({ ...prev, duration_hours: next.length }));
   };
 
   const handleDurationChange = (duration: string) => {
@@ -137,8 +175,7 @@ export default function CourtBooking() {
     return (
       bookingForm.court_id > 0 &&
       bookingForm.date &&
-      bookingForm.time_slot_id > 0 &&
-      bookingForm.duration_hours > 0 &&
+      selectedSlotIds.length > 0 &&
       bookingForm.agree_to_terms
     );
   };
@@ -194,8 +231,16 @@ export default function CourtBooking() {
               razorpay_signature: response.razorpay_signature,
               court: bookingForm.court_id,
               booking_date: format(bookingForm.date!, 'yyyy-MM-dd'),
-              start_time: selectedTimeSlot.start_time,
-              end_time: selectedTimeSlot.end_time,
+              start_time: (() => {
+                const slots = getSlots().filter((s: any) => selectedSlotIds.includes(s.id))
+                  .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
+                return slots[0].start_time;
+              })(),
+              end_time: (() => {
+                const slots = getSlots().filter((s: any) => selectedSlotIds.includes(s.id))
+                  .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
+                return slots[slots.length - 1].end_time;
+              })(),
               special_requests: bookingForm.special_requests,
             };
             const verifyRes = await paymentsAPI.verifyAndBook(payload);
@@ -263,8 +308,7 @@ export default function CourtBooking() {
     );
   }
 
-  // Build slots array safely
-  const getSlots = () => (selectedCourt?.available_slots || selectedCourt?.time_slots || []) as any[];
+  // Build slots array safely (moved earlier)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -313,7 +357,7 @@ export default function CourtBooking() {
                         return (
                           <SelectItem key={court.id} value={court.id.toString()}>
                             <div className="flex items-center justify-between w-full">
-                              <span>{court.name}</span>
+                              <span>{displayCourtName(court.name)}</span>
                               <Badge variant={available ? 'default' : 'secondary'}>
                                 {available ? 'Available' : 'Unavailable'}
                               </Badge>
@@ -349,51 +393,33 @@ export default function CourtBooking() {
                   />
                 </div>
 
-                {/* Time Slot Selection */}
+                {/* Time Slot Selection (multiple with checkboxes) */}
                 {selectedCourt && bookingForm.date && (
                   <div>
-                    <Label htmlFor="time-slot">Select Time Slot *</Label>
-                    <Select 
-                      value={bookingForm.time_slot_id.toString()} 
-                      onValueChange={handleTimeSlotChange}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a time slot" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getSlots()
-                          .filter((slot: any) => slot.is_available)
-                          .map((slot: any) => (
-                            <SelectItem key={slot.id} value={slot.id.toString()}>
-                              <div className="flex items-center justify-between w-full">
+                    <Label htmlFor="time-slot">Select Time Slot(s) *</Label>
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {getSlots()
+                        .filter((slot: any) => slot.is_available)
+                        .map((slot: any) => {
+                          const checked = selectedSlotIds.includes(slot.id);
+                          return (
+                            <label key={slot.id} className={`flex items-center justify-between px-3 py-2 border rounded-md cursor-pointer ${checked ? 'bg-purple-50 border-purple-300' : ''}`}>
+                              <div className="flex items-center gap-2">
+                                <Checkbox checked={checked} onCheckedChange={() => toggleSlot(slot.id)} />
                                 <span>{slot.start_time} - {slot.end_time}</span>
-                                <span className="text-green-600">₹{selectedCourt.price_per_hour}</span>
                               </div>
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                              <span className="text-green-600">₹{selectedCourt.price_per_hour}</span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                    {selectedSlotIds.length > 0 && (
+                      <p className="text-xs text-gray-600 mt-2">Selected duration: {selectedSlotIds.length} hour(s)</p>
+                    )}
                   </div>
                 )}
 
-                {/* Duration Selection */}
-                <div>
-                  <Label htmlFor="duration">Duration (Hours) *</Label>
-                  <Select 
-                    value={bookingForm.duration_hours.toString()} 
-                    onValueChange={handleDurationChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 Hour</SelectItem>
-                      <SelectItem value="2">2 Hours</SelectItem>
-                      <SelectItem value="3">3 Hours</SelectItem>
-                      <SelectItem value="4">4 Hours</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Duration Selection removed; computed from selected slots */}
 
                 {/* Special Requests */}
                 <div>
@@ -453,7 +479,7 @@ export default function CourtBooking() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Court:</span>
-                      <span className="font-medium">{selectedCourt.name}</span>
+                      <span className="font-medium">{displayCourtName(selectedCourt.name)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Sport:</span>
@@ -467,17 +493,19 @@ export default function CourtBooking() {
                         </span>
                       </div>
                     )}
-                    {selectedTimeSlot && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Time:</span>
-                        <span className="font-medium">
-                          {selectedTimeSlot.start_time} - {selectedTimeSlot.end_time}
-                        </span>
-                      </div>
-                    )}
+                    {selectedSlotIds.length > 0 && (() => {
+                      const slots = getSlots().filter((s: any) => selectedSlotIds.includes(s.id))
+                        .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
+                      return (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Time:</span>
+                          <span className="font-medium">{slots[0].start_time} - {slots[slots.length - 1].end_time}</span>
+                        </div>
+                      );
+                    })()}
                     <div className="flex justify-between">
                       <span className="text-gray-600">Duration:</span>
-                      <span className="font-medium">{bookingForm.duration_hours} hour(s)</span>
+                      <span className="font-medium">{Math.max(bookingForm.duration_hours, selectedSlotIds.length)} hour(s)</span>
                     </div>
                   </div>
                 )}
@@ -491,7 +519,7 @@ export default function CourtBooking() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Duration:</span>
-                      <span>{bookingForm.duration_hours} hour(s)</span>
+                      <span>{Math.max(bookingForm.duration_hours, selectedSlotIds.length)} hour(s)</span>
                     </div>
                     <div className="flex justify-between font-semibold text-lg border-t pt-2">
                       <span>Total:</span>

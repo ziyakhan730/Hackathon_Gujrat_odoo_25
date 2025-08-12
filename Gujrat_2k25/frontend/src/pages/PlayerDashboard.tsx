@@ -116,12 +116,12 @@ export default function PlayerDashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6 bg-gray-900 min-h-screen">
+    <div className="px-6 py-4 space-y-6 bg-gray-900 min-h-screen">
       {/* Welcome Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white"
+        className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg px-5 py-4 text-white"
       >
         <h1 className="text-3xl font-bold mb-2">
           Welcome back, {user?.first_name}! 👋

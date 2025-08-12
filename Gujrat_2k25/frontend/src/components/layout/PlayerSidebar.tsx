@@ -131,14 +131,7 @@ export function PlayerSidebar({ isOpen, onToggle }: PlayerSidebarProps) {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <Link to="/player" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">Q</span>
-            </div>
-            <span className="font-display font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              QuickCourt
-            </span>
-          </Link>
+          <div />
           
           <Button
             variant="ghost"

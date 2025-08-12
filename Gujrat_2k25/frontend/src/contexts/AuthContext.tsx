@@ -25,7 +25,7 @@ interface AuthContextType {
   updateUser: (userData: Partial<User>) => void;
   setUser: (user: User | null) => void;
   getRedirectPath: (userType: string) => string;
-  sendOTP: () => Promise<boolean>;
+  sendOTP: (email?: string) => Promise<boolean>;
   verifyEmail: (otp: string, email?: string) => Promise<boolean>;
 }
 
@@ -171,11 +171,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('temp_refresh_token', data.data.tokens.refresh);
         localStorage.setItem('temp_user', JSON.stringify(data.data.user));
         
-        // Verify tokens were stored
-        console.log('Stored temp access token:', localStorage.getItem('temp_access_token'));
-        console.log('Stored temp refresh token:', localStorage.getItem('temp_refresh_token'));
-        console.log('Stored temp user:', localStorage.getItem('temp_user'));
-        
         // Don't set user as authenticated yet - they need to verify email first
         return true;
       }
@@ -253,21 +248,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const sendOTP = async (): Promise<boolean> => {
+  const sendOTP = async (email?: string): Promise<boolean> => {
     try {
-      // Use temp token if available (for new registrations), otherwise use regular token
       const token = localStorage.getItem('temp_access_token') || localStorage.getItem('access_token');
-      
-      const response = await fetch('http://localhost:8000/api/auth/send-otp/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const tempUser = localStorage.getItem('temp_user');
+      const fallbackEmail = email || (tempUser ? JSON.parse(tempUser)?.email : undefined);
 
-      const data = await response.json();
-      return response.ok && data.success;
+      // Try authenticated endpoint first if token exists
+      if (token) {
+        const authRes = await fetch('http://localhost:8000/api/auth/send-otp/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        if (authRes.ok) return true;
+        // If token failed (e.g., 401), fall back below
+      }
+
+      // Fallback unauthenticated endpoint with email
+      if (!fallbackEmail) return false;
+      const unauthRes = await fetch('http://localhost:8000/api/auth/send-otp-without-auth/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: fallbackEmail }),
+      });
+      return unauthRes.ok;
     } catch (error) {
       console.error('Send OTP error:', error);
       return false;
@@ -276,49 +283,69 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyEmail = async (otp: string, email?: string): Promise<boolean> => {
     try {
-      // Use temp token if available (for new registrations), otherwise use regular token
       const token = localStorage.getItem('temp_access_token') || localStorage.getItem('access_token');
-      
-      // Determine which endpoint to use based on authentication status
-      const endpoint = token ? '/api/auth/verify-email/' : '/api/auth/verify-email-without-auth/';
-      
+      const tempUser = localStorage.getItem('temp_user');
+      const fallbackEmail = email || (tempUser ? JSON.parse(tempUser)?.email : undefined);
+
       const requestBody: any = { otp };
-      if (email) {
-        requestBody.email = email;
-      }
-      
-      const headers: any = {
-        'Content-Type': 'application/json',
-      };
-      
+      if (fallbackEmail) requestBody.email = fallbackEmail;
+
+      // Prefer authenticated endpoint
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        const response = await fetch('http://localhost:8000/api/auth/verify-email/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.success) {
+          // Promote temp session to real session if present
+          const tempAccess = localStorage.getItem('temp_access_token');
+          const tempRefresh = localStorage.getItem('temp_refresh_token');
+          const tempUserStr = localStorage.getItem('temp_user');
+          if (tempAccess && tempRefresh && tempUserStr) {
+            localStorage.setItem('access_token', tempAccess);
+            localStorage.setItem('refresh_token', tempRefresh);
+            localStorage.setItem('user', tempUserStr);
+            setUser(JSON.parse(tempUserStr));
+            localStorage.removeItem('temp_access_token');
+            localStorage.removeItem('temp_refresh_token');
+            localStorage.removeItem('temp_user');
+          } else if (user) {
+            // Update current user flag if already logged in
+            const updatedUser = { ...user, is_email_verified: true } as User;
+            setUser(updatedUser);
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+          }
+          return true;
+        }
+        // If unauthorized or failed, fall back to unauth path if we have email
       }
-      
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+
+      if (!fallbackEmail) return false;
+      const unauthRes = await fetch('http://localhost:8000/api/auth/verify-email-without-auth/', {
         method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp, email: fallbackEmail }),
       });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        // Update user's email verification status
-        if (user) {
-          const updatedUser = { ...user, is_email_verified: true };
-          setUser(updatedUser);
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-        }
-        
-        // If this was a new registration, clear temp tokens and redirect to login
-        if (localStorage.getItem('temp_access_token')) {
+      const unauthData = await unauthRes.json().catch(() => ({}));
+      if (unauthRes.ok && (unauthData.success || unauthData.data)) {
+        // Successful verify without auth: create a logged session if temp tokens exist
+        const tempAccess = localStorage.getItem('temp_access_token');
+        const tempRefresh = localStorage.getItem('temp_refresh_token');
+        const tempUserStr = localStorage.getItem('temp_user');
+        if (tempAccess && tempRefresh && tempUserStr) {
+          localStorage.setItem('access_token', tempAccess);
+          localStorage.setItem('refresh_token', tempRefresh);
+          localStorage.setItem('user', tempUserStr);
+          setUser(JSON.parse(tempUserStr));
           localStorage.removeItem('temp_access_token');
+          localStorage.removeItem('temp_refresh_token');
           localStorage.removeItem('temp_user');
-          // Redirect to login page after successful verification
-          window.location.href = '/login';
         }
-        
         return true;
       }
       return false;

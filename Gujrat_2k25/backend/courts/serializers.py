@@ -3,6 +3,7 @@ from django.db.models import Avg, Count, Sum, Min
 from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
+from django.db import transaction
 from .models import (
     Facility, FacilityPhoto, Sport, FacilitySport, Amenity, FacilityAmenity,
     Court, CourtPhoto, TimeSlot, Booking, CourtRating, Notification
@@ -479,9 +480,32 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        validated_data['user'] = self.context['request'].user
-        validated_data['facility'] = validated_data['court'].facility
-        return super().create(validated_data)
+        # Transaction-safe creation to avoid race conditions
+        with transaction.atomic():
+            court = validated_data['court']
+            booking_date = validated_data['booking_date']
+            start_time = validated_data['start_time']
+            end_time = validated_data['end_time']
+
+            # Lock existing bookings for this court and day, then re-check overlap
+            (Booking.objects
+             .select_for_update()
+             .filter(court=court, booking_date=booking_date))
+
+            conflict = Booking.objects.filter(
+                court=court,
+                booking_date=booking_date,
+                status__in=['pending', 'confirmed'],
+                start_time__lt=end_time,
+                end_time__gt=start_time
+            ).exists()
+
+            if conflict:
+                raise serializers.ValidationError("Time slot is already booked")
+
+            validated_data['user'] = self.context['request'].user
+            validated_data['facility'] = court.facility
+            return super().create(validated_data)
 
 class BookingUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating bookings"""

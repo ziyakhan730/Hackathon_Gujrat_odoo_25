@@ -714,8 +714,15 @@ class PlayerVenueDetailView(APIView):
             courts_data = []
             
             for court in courts:
-                # Get available time slots for today
-                today = timezone.now().date()
+                # Get requested date or today
+                date_param = request.query_params.get('date')
+                if date_param:
+                    try:
+                        ref_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+                    except Exception:
+                        ref_date = timezone.now().date()
+                else:
+                    ref_date = timezone.now().date()
                 # Get all time slots for this court
                 all_slots = TimeSlot.objects.filter(court=court, is_available=True).order_by('start_time')
                 
@@ -725,7 +732,7 @@ class PlayerVenueDetailView(APIView):
                     # Check if this time slot is booked for today
                     is_booked = Booking.objects.filter(
                         court=court,
-                        booking_date=today,
+                        booking_date=ref_date,
                         start_time__lt=slot.end_time,
                         end_time__gt=slot.start_time,
                         status__in=['confirmed', 'pending']
@@ -866,6 +873,24 @@ class PaymentViewSet(viewsets.ViewSet):
                 'end_time': request.data.get('end_time'),
                 'special_requests': request.data.get('special_requests', ''),
             }
+            # Quick overlap guard before serializer (not a substitute for serializer's atomic check)
+            try:
+                court_id = int(booking_payload['court'])
+                booking_date = booking_payload['booking_date']
+                start_time = booking_payload['start_time']
+                end_time = booking_payload['end_time']
+                if court_id and booking_date and start_time and end_time:
+                    overlap = Booking.objects.filter(
+                        court_id=court_id,
+                        booking_date=booking_date,
+                        status__in=['pending', 'confirmed'],
+                        start_time__lt=end_time,
+                        end_time__gt=start_time
+                    ).exists()
+                    if overlap:
+                        return Response({'success': False, 'message': 'Time slot is already booked'}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception:
+                pass
             serializer = BookingCreateSerializer(data=booking_payload, context={'request': request})
             if serializer.is_valid():
                 booking = serializer.save()
